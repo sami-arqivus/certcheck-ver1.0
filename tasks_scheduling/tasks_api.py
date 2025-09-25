@@ -28,6 +28,13 @@ from urllib.parse import urlparse
 from celery.result import AsyncResult
 import httpx
 import base64
+import cv2
+import numpy as np
+from PIL import Image
+import pytesseract
+import fitz  # PyMuPDF for PDF processing
+import io
+import re
 
 
 app = FastAPI(title = "Task scheduler API", description = "This API is used to schedule tasks using Celery.")
@@ -167,100 +174,223 @@ async def get_admin_validation_result(task_id: str):
         logger.error(f"Failed to get task result: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def extract_text_from_image(image_bytes: bytes) -> str:
+    """Extract text from image using OCR"""
+    try:
+        # Convert bytes to PIL Image
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Convert to RGB if necessary
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Convert PIL to OpenCV format
+        opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        
+        # Preprocess image for better OCR
+        gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+        
+        # Apply denoising
+        denoised = cv2.fastNlMeansDenoising(gray)
+        
+        # Apply thresholding
+        _, thresh = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Extract text using Tesseract
+        text = pytesseract.image_to_string(thresh, config='--psm 6')
+        
+        return text.strip()
+    except Exception as e:
+        logger.error(f"OCR extraction failed: {str(e)}")
+        return ""
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract text from PDF"""
+    try:
+        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
+        text = ""
+        
+        for page_num in range(pdf_document.page_count):
+            page = pdf_document[page_num]
+            text += page.get_text()
+        
+        pdf_document.close()
+        return text.strip()
+    except Exception as e:
+        logger.error(f"PDF extraction failed: {str(e)}")
+        return ""
+
+def parse_cscs_data(text: str) -> dict:
+    """Parse CSCS card data from extracted text"""
+    try:
+        # Common CSCS card patterns
+        data = {
+            "scheme": None,
+            "registration_number": None,
+            "last_name": None,
+            "first_name": None,
+            "expiry_date": None,
+            "hse_tested": None,
+            "role": None
+        }
+        
+        # Convert to uppercase for pattern matching
+        text_upper = text.upper()
+        
+        # Extract scheme (CPCS, CSCS, etc.)
+        scheme_patterns = [r'CPCS', r'CSCS', r'CITB']
+        for pattern in scheme_patterns:
+            if re.search(pattern, text_upper):
+                data["scheme"] = re.search(pattern, text_upper).group()
+                break
+        
+        # Extract registration number (usually 8 digits)
+        reg_pattern = r'(\d{8,})'
+        reg_match = re.search(reg_pattern, text)
+        if reg_match:
+            data["registration_number"] = reg_match.group(1)
+        
+        # Extract names (look for common name patterns)
+        name_patterns = [
+            r'([A-Z][A-Z\s]+)',  # All caps names
+            r'([A-Z][a-z]+\s+[A-Z][a-z]+)',  # Proper case names
+        ]
+        
+        for pattern in name_patterns:
+            matches = re.findall(pattern, text)
+            for match in matches:
+                if len(match.split()) >= 2:  # At least first and last name
+                    names = match.split()
+                    data["last_name"] = names[-1]  # Last word is last name
+                    data["first_name"] = names[0]  # First word is first name
+                    break
+            if data["last_name"]:
+                break
+        
+        # Extract expiry date (various date formats)
+        date_patterns = [
+            r'(\d{2}/\d{2}/\d{4})',  # DD/MM/YYYY
+            r'(\d{2}-\d{2}-\d{4})',  # DD-MM-YYYY
+            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
+        ]
+        
+        for pattern in date_patterns:
+            date_match = re.search(pattern, text)
+            if date_match:
+                data["expiry_date"] = date_match.group(1)
+                break
+        
+        return data
+    except Exception as e:
+        logger.error(f"Data parsing failed: {str(e)}")
+        return {}
+
+@app.post("/ocr-extract/")
+async def ocr_extract(file: UploadFile = File(...)):
+    """
+    Extract text and parse CSCS card data from uploaded file
+    """
+    try:
+        # Read file content
+        file_content = await file.read()
+        
+        # Determine file type and extract text
+        if file.content_type and 'pdf' in file.content_type.lower():
+            text = extract_text_from_pdf(file_content)
+        else:
+            text = extract_text_from_image(file_content)
+        
+        if not text:
+            return {
+                "success": False,
+                "message": "Could not extract text from file",
+                "extracted_data": None
+            }
+        
+        # Parse CSCS card data
+        parsed_data = parse_cscs_data(text)
+        
+        # Check if we have minimum required fields
+        has_required_fields = (
+            parsed_data.get("scheme") and 
+            parsed_data.get("registration_number") and 
+            parsed_data.get("last_name")
+        )
+        
+        return {
+            "success": True,
+            "message": "Text extracted successfully",
+            "extracted_data": parsed_data,
+            "raw_text": text,
+            "has_required_fields": has_required_fields
+        }
+        
+    except Exception as e:
+        logger.error(f"OCR extraction failed: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error processing file: {str(e)}",
+            "extracted_data": None
+        }
+
 @app.post("/bulk-verify-cards/")
 async def bulk_verify_cards(files: list[UploadFile] = File(...)):
     """
-    Bulk verify multiple CSCS card files
+    Bulk verify multiple CSCS card files using internal OCR
     """
     results = []
     
     for file in files:
         try:
-            # Read file content
-            file_content = await file.read()
+            # Use internal OCR extraction
+            ocr_result = await ocr_extract(file)
             
-            # Convert to base64 for vision API
-            base64_content = base64.b64encode(file_content).decode('utf-8')
-            
-            # Call vision API
-            async with httpx.AsyncClient() as client:
-                vision_response = await client.post(
-                    "http://vision_models:8002/cert-to-json",
-                    files={"file": (file.filename, file_content, file.content_type)},
-                    timeout=60.0
-                )
+            if ocr_result["success"] and ocr_result.get("has_required_fields"):
+                extracted_data = ocr_result["extracted_data"]
                 
-                if vision_response.status_code == 200:
-                    vision_data = vision_response.json()
+                # Call admin validation using the existing endpoint
+                try:
+                    validation_response = await admin_validate_cscs_card_task.delay(
+                        scheme=extracted_data["scheme"],
+                        registration_number=extracted_data["registration_number"],
+                        last_name=extracted_data["last_name"],
+                        first_name=extracted_data.get("first_name"),
+                        expiry_date=extracted_data.get("expiry_date"),
+                        hse_tested=None,
+                        role=None
+                    )
                     
-                    if vision_data.get("success") and vision_data.get("extracted_data"):
-                        extracted_data = vision_data["extracted_data"]
-                        
-                        # Check if we have required fields
-                        if (extracted_data.get("scheme") and 
-                            extracted_data.get("registration_number") and 
-                            extracted_data.get("last_name")):
-                            
-                            # Call admin validation
-                            validation_response = await client.post(
-                                "http://localhost:8004/admin_validate_cscs_card/",
-                                json={
-                                    "scheme": extracted_data["scheme"],
-                                    "registration_number": extracted_data["registration_number"],
-                                    "last_name": extracted_data["last_name"],
-                                    "first_name": extracted_data.get("first_name"),
-                                    "expiry_date": extracted_data.get("expiry_date"),
-                                    "hse_tested": None,
-                                    "role": None
-                                }
-                            )
-                            
-                            if validation_response.status_code == 200:
-                                validation_data = validation_response.json()
-                                results.append({
-                                    "filename": file.filename,
-                                    "file_type": file.content_type,
-                                    "success": True,
-                                    "message": "Verification successful",
-                                    "extracted_data": extracted_data,
-                                    "validation_data": validation_data
-                                })
-                            else:
-                                results.append({
-                                    "filename": file.filename,
-                                    "file_type": file.content_type,
-                                    "success": False,
-                                    "message": f"Validation failed: {validation_response.text}",
-                                    "extracted_data": extracted_data,
-                                    "validation_data": None
-                                })
-                        else:
-                            results.append({
-                                "filename": file.filename,
-                                "file_type": file.content_type,
-                                "success": False,
-                                "message": "Could not extract required card details",
-                                "extracted_data": extracted_data,
-                                "validation_data": None
-                            })
-                    else:
-                        results.append({
-                            "filename": file.filename,
-                            "file_type": file.content_type,
-                            "success": False,
-                            "message": "Vision API failed to extract data",
-                            "extracted_data": None,
-                            "validation_data": None
-                        })
-                else:
+                    # Wait for result (with timeout)
+                    validation_result = validation_response.get(timeout=300)  # 5 minute timeout
+                    
+                    results.append({
+                        "filename": file.filename,
+                        "file_type": file.content_type,
+                        "success": True,
+                        "message": "Verification successful",
+                        "extracted_data": extracted_data,
+                        "validation_data": validation_result,
+                        "task_id": str(validation_response.id)
+                    })
+                    
+                except Exception as validation_error:
                     results.append({
                         "filename": file.filename,
                         "file_type": file.content_type,
                         "success": False,
-                        "message": f"Vision API error: {vision_response.status_code}",
-                        "extracted_data": None,
+                        "message": f"Validation failed: {str(validation_error)}",
+                        "extracted_data": extracted_data,
                         "validation_data": None
                     })
+            else:
+                results.append({
+                    "filename": file.filename,
+                    "file_type": file.content_type,
+                    "success": False,
+                    "message": ocr_result.get("message", "Could not extract required card details"),
+                    "extracted_data": ocr_result.get("extracted_data"),
+                    "validation_data": None
+                })
                     
         except Exception as e:
             results.append({
