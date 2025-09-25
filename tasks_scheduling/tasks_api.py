@@ -217,7 +217,7 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         return ""
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF"""
+    """Extract text from PDF - handles both text-based and scanned PDFs"""
     try:
         logger.info(f"Opening PDF with {len(pdf_bytes)} bytes")
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -228,6 +228,23 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
             page = pdf_document[page_num]
             page_text = page.get_text()
             logger.info(f"Page {page_num + 1} text length: {len(page_text)}")
+            
+            # If no text found, try OCR on the page image
+            if not page_text.strip():
+                logger.info(f"No text found on page {page_num + 1}, trying OCR...")
+                try:
+                    # Convert page to image
+                    mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better OCR
+                    pix = page.get_pixmap(matrix=mat)
+                    img_data = pix.tobytes("png")
+                    
+                    # Use OCR on the image
+                    page_text = extract_text_from_image(img_data)
+                    logger.info(f"OCR on page {page_num + 1} extracted {len(page_text)} characters")
+                except Exception as ocr_error:
+                    logger.warning(f"OCR failed on page {page_num + 1}: {str(ocr_error)}")
+                    page_text = ""
+            
             text += page_text
         
         pdf_document.close()
