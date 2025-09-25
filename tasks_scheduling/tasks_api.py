@@ -318,73 +318,75 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "message": f"Unsupported file type: {file_extension}. Please upload images (JPG, PNG, etc.) or PDF files.",
                 "extracted_data": None
             }
+        
+        # Create temporary file for processing
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
             temp_file.write(file_content)
             temp_image_path = temp_file.name
 
-        try:
-            input_content = [
-                {
-                    "type": "input_text",
-                    "text": (
-                        "Imagine You are an expert in extracting data from CSCS card (UK Construction Skills Certification Scheme) that is needed to validate the candidate. "
-                        "You have to select 1 scheme that the card belongs to from the following list: [ACAD, ACE, ADIA, ADSA(DHF), ALLMI, AMI, Allianz UK, BFBi, British Engineering Services, CCDO,CISRS, CPCS, CSCS, CSR, CSWIP, DSA, ECS (JIB), ECS (SJIB), EUSR, Engineering Services Skillcard, FASET, FISS, GEA, HSB, ICATS, IEXPE, IPAF, JIB PMES, LEEA, LISS, Llyods British, MPQC, NPORS, PASMA, Q-card, SAFed, SEIRS, SICCS, SNIJIB, TICA, TTM, Train the painter]"
-                        "Extract expiry date in str format not in datetime.data(). "
-                    ),
-                }
-            ]
-            if file_extension in ["png", "jpg", "jpeg"]:
-                with open(temp_image_path, "rb") as image_file:
-                    base64_image = encode_image(image_file)
-                input_content.append({
-                    "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{base64_image}",
-                })
-            elif file_extension == "pdf":
-                try:
-                    images = convert_from_path(temp_image_path)
-                    if not images:
-                        raise HTTPException(status_code=400, detail="No images found in the PDF")
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image_file:
-                        images[0].save(temp_image_file.name, "JPEG")
-                        with open(temp_image_file.name, "rb") as image_file:
-                            base64_image = encode_image(image_file)
-                        os.unlink(temp_image_file.name) 
+            try:
+                input_content = [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "Imagine You are an expert in extracting data from CSCS card (UK Construction Skills Certification Scheme) that is needed to validate the candidate. "
+                            "You have to select 1 scheme that the card belongs to from the following list: [ACAD, ACE, ADIA, ADSA(DHF), ALLMI, AMI, Allianz UK, BFBi, British Engineering Services, CCDO,CISRS, CPCS, CSCS, CSR, CSWIP, DSA, ECS (JIB), ECS (SJIB), EUSR, Engineering Services Skillcard, FASET, FISS, GEA, HSB, ICATS, IEXPE, IPAF, JIB PMES, LEEA, LISS, Llyods British, MPQC, NPORS, PASMA, Q-card, SAFed, SEIRS, SICCS, SNIJIB, TICA, TTM, Train the painter]"
+                            "Extract expiry date in str format not in datetime.data(). "
+                        ),
+                    }
+                ]
+                if file_extension in ["png", "jpg", "jpeg"]:
+                    with open(temp_image_path, "rb") as image_file:
+                        base64_image = encode_image(image_file)
                     input_content.append({
                         "type": "input_image",
                         "image_url": f"data:image/jpeg;base64,{base64_image}",
                     })
-                except Exception as e:
-                    raise HTTPException(status_code=400, detail=f"Failed to extract images from PDF: {str(e)}")
+                elif file_extension == "pdf":
+                    try:
+                        images = convert_from_path(temp_image_path)
+                        if not images:
+                            raise HTTPException(status_code=400, detail="No images found in the PDF")
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image_file:
+                            images[0].save(temp_image_file.name, "JPEG")
+                            with open(temp_image_file.name, "rb") as image_file:
+                                base64_image = encode_image(image_file)
+                            os.unlink(temp_image_file.name) 
+                        input_content.append({
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{base64_image}",
+                        })
+                    except Exception as e:
+                        raise HTTPException(status_code=400, detail=f"Failed to extract images from PDF: {str(e)}")
 
-            print("Extracting data from certificate/card...")
-            input_data=[
-                    {
-                        "role": "user",
-                        "content": input_content,
-                    }
-                ]
-            response = await call_openai_parse(
-                client=client,
-                model="gpt-4.1",
-                input_data=input_data,
-            )
-            cscs_response = response.output_parsed
-            print("CSCS Response:", cscs_response)
-            cscs_json = cscs_response.model_dump()
-            print("CSCS JSON:", cscs_json)
+                print("Extracting data from certificate/card...")
+                input_data=[
+                        {
+                            "role": "user",
+                            "content": input_content,
+                        }
+                    ]
+                response = await call_openai_parse(
+                    client=client,
+                    model="gpt-4.1",
+                    input_data=input_data,
+                )
+                cscs_response = response.output_parsed
+                print("CSCS Response:", cscs_response)
+                cscs_json = cscs_response.model_dump()
+                print("CSCS JSON:", cscs_json)
 
-            return {
-                "success": True,
-                "message": "OpenAI extraction completed",
-                "extracted_data": cscs_json
-            }
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_image_path):
-                os.unlink(temp_image_path)
+                return {
+                    "success": True,
+                    "message": "OpenAI extraction completed",
+                    "extracted_data": cscs_json
+                }
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_image_path):
+                    os.unlink(temp_image_path)
 
 @app.post("/bulk-verify-cards/")
 async def bulk_verify_cards(files: list[UploadFile] = File(...)):
