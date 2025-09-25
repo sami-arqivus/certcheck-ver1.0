@@ -1,0 +1,344 @@
+# version: "3.9"
+volumes:
+  postgres_data:
+    driver: local
+  deepface_weights:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: postgres_container
+    restart: always
+    ports:
+      - "5432:5432"  # maps container's 5432 to host's 5432
+    networks:
+      - test-network
+    environment:
+      POSTGRES_DB: certcheck
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 7622
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # persist data across container restarts
+
+  login_register_user:
+    build:
+      context: ./login_register
+    container_name: login_register_container
+    # ports:
+    #   - "8000:8000"
+    networks:
+      - test-network
+    volumes:
+      - ./login_register:/app     # for live reload on code change
+    env_file:
+      - ./.env.shared
+      - ./login_register/.env
+    depends_on:
+      - postgres
+
+  # frontend:
+  #   build:
+  #     context: ./frontend/certcheck-v1
+  #   container_name: user_frontend_container
+  #   # ports:
+  #   #   - "8080:8080"
+  #   networks:
+  #     - test-network
+  #   volumes:
+  #     - ./frontend:/app           # for live reload on frontend edits
+
+  frontend-web:
+    build:
+      context: ./frontend/certcheck-v1
+    container_name: user_frontend_web           #APP_ENV=production
+    networks:
+      - test-network
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./frontend/certcheck-v1/.env.development
+    command: sh -c "npm run build && npx serve -s dist -l 8080"
+    volumes:
+      -  ./frontend/certcheck-v1:/app
+      -  /app/node_modules
+      -  ./frontend/certcheck-v1/dist:/app/dist
+
+  # frontend-android:
+  #   build:
+  #     context: ./frontend/certcheck-v1
+  #   container_name: user_frontend_android
+  #   env_file:
+  #     - ./frontend/certcheck-v1/.env.android
+  #   networks:
+  #     - test-network
+  #   volumes:
+  #     - ./frontend/certcheck-v1:/app
+  #     -  /app/node_modules
+  #     - ./frontend/certcheck-v1/dist:/app/dist
+  #     # - ./frontend/certcheck-v1/wait-for-dist.sh:/app/wait-for-dist.sh
+  #   # command: sh -c "until [ -f /app/dist/index.html ]; do echo 'Waiting for dist/index.html...'; sleep 2; done; echo 'dist/index.html found'; npm run build && npx cap sync android"
+  #   command: sh -c "npm run build &&  npx cap copy android && npx cap sync android"
+  #   depends_on:
+  #     - frontend-web
+
+  # frontend-ios:
+  #   build:
+  #     context: ./frontend/certcheck-v1
+  #   container_name: user_frontend_ios
+  #   env_file:
+  #     - ./frontend/certcheck-v1/.env.ios
+  #   networks:
+  #     - test-network
+  #   volumes:
+  #     - ./frontend/certcheck-v1:/app
+  #     - ./frontend/certcheck-v1/dist:/app/dist
+  #     - /app/node_modules
+  #   # command: sh -c "until [ -f /app/dist/index.html ]; do echo 'Waiting for dist/index.html...'; sleep 2; done; echo 'dist/index.html found'; npm run build && npx cap sync ios"
+  #   command: sh -c "npm run build && npx cap copy ios && npx cap sync ios"
+  #   depends_on:
+  #     - frontend-web
+      # - ./frontend/certcheck-v1/wait-for-dist.sh:/app/wait-for-dist.sh
+    # command: sh -c "chmod +x /app/wait-for-dist.sh && /app/wait-for-dist.sh ios"
+    
+
+  # Android sync
+  # frontend-android:
+  #   build:
+  #     context: ./frontend/certcheck-v1
+  #   container_name: user_frontend_android
+  #   env_file:
+  #     - ./frontend/certcheck-v1/.env.android                 #APP_ENV=production
+  #   networks:
+  #     - test-network
+  #   volumes:
+  #     -  ./frontend:/app
+  #     - ./frontend/certcheck-v1/dist:/app/dist
+  #   command: sh -c "npm run build && npx cap sync android"
+  #   depends_on:
+  #     - frontend-web
+  # # # iOS sync
+  # frontend-ios:
+  #   build:
+  #     context: ./frontend/certcheck-v1
+  #   container_name: user_frontend_ios
+  #   env_file:
+  #     - ./frontend/certcheck-v1/.env.ios                   #APP_ENV=production
+  #   networks:
+  #     - test-network
+  #   volumes:
+  #     -  ./frontend:/app
+  #     - ./frontend/certcheck-v1/dist:/app/dist
+  #   command: sh -c "npm run build && npx cap sync ios"
+  #   depends_on:
+  #     - frontend-web
+  # # Production build + serve (using nginx)
+  # frontend-prod:
+  #   build:
+  #     context: ./frontend/certcheck-v1
+  #   container_name: user_frontend_prod
+  #   env_file:
+  #     - ./frontend/certcheck-v1/.env.prod
+  #   networks:
+  #     - test-network
+  #   volumes:
+  #     -  ./frontend:/app
+  #   command: sh -c "npm run build && npx cap sync && npx serve -s dist"
+
+
+
+  admin_frontend:
+    build:
+      context: ./admin_frontend/certcheck-admin-vista
+    container_name: admin_frontend_container
+    # ports:
+    #   - "8081:8081"
+    networks:
+      - test-network
+    volumes:
+      - ./admin_frontend:/app 
+
+  aws:
+    build:
+      context: ./aws
+    container_name: aws_container
+    # ports:
+    #   - "8001:8001"
+    networks:
+      - test-network
+    volumes:
+      - ./aws:/app
+    env_file:
+      - ./.env.shared
+      - ./aws/.env
+    depends_on:
+      - postgres
+
+  vision_models:
+    build:
+      context: ./vision_models
+    container_name: vision_models_container
+    # ports:
+    #   - "8002:8002"
+    networks:
+      - test-network
+    volumes:
+      - ./vision_models:/app
+      - deepface_weights:/root/.deepface/weights
+    env_file:
+      - ./.env.shared
+      - ./vision_models/.env
+    depends_on:
+      - aws
+      - postgres
+
+  backend:
+    build:
+      context: ./backend
+    container_name: backend_container
+    # ports:
+    #   - "8003:8003"
+    networks:
+      - test-network
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./.env.shared
+      - ./backend/.env
+    depends_on:
+      - vision_models
+      - postgres
+
+  nginx:
+    build:
+      context: ./nginx
+    container_name: nginx_container
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - test-network
+    env_file:
+      - ./nginx/.env  # contains APP_ENV=development or production
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/conf.d/nginx.conf.template
+      - ./nginx/entrypoint.sh:/entrypoint.sh 
+      - ./nginx/proxy_params:/etc/nginx/proxy_params
+      # - ./nginx/certificate.crt:/etc/nginx/ssl/certificate.crt
+      # - ./nginx/private.key:/etc/nginx/ssl/private.key
+      # - ./nginx/ca_bundle.crt:/etc/nginx/ssl/ca_bundle.crt
+      - ./nginx/.well-known:/usr/share/nginx/html/.well-known
+      # - ./frontend/certcheck-v1/dist:/usr/share/nginx/html/frontend
+      # - ./frontend/certcheck-v1/dist:/usr/share/nginx/html
+      # - ./admin_frontend/certcheck-admin-vista/dist:/usr/share/nginx/admin-dist
+      - ./nginx/cert.pem:/etc/nginx/ssl/cert.pem
+      - ./nginx/key.pem:/etc/nginx/ssl/key.pem
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    depends_on:
+      - login_register_user
+      - admin_frontend
+      - backend
+      - aws
+      - vision_models
+      - celery-insights
+      - frontend-web
+      # - frontend-android
+      # - frontend-ios
+      
+
+
+
+  tasks_scheduling:
+    build:
+      context: ./tasks_scheduling
+    container_name: tasks_scheduling_container
+    # ports:
+    #   - "8004:8004"
+    networks:
+      - test-network
+    volumes:
+      - ./tasks_scheduling:/app
+      - ./tasks_scheduling/aws-global-bundle.pem:/etc/ssl/certs/aws-global-bundle.pem:ro
+    env_file:
+      - ./.env.shared
+      - ./tasks_scheduling/.env
+    depends_on:
+      - backend
+      - postgres
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./tasks_scheduling
+    container_name: worker_container
+    networks:
+      - test-network
+    volumes:
+      - ./tasks_scheduling:/app
+      - ./tasks_scheduling/aws-global-bundle.pem:/etc/ssl/certs/aws-global-bundle.pem:ro
+    env_file:
+      - ./.env.shared
+      - ./tasks_scheduling/.env
+    depends_on:
+      - backend
+      - postgres
+    command:  /home/celeryuser/.local/bin/celery -A celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-5} --pool=gevent --prefetch-multiplier=1 --queues=default --hostname=worker@%h --without-gossip --without-mingle --events 
+    restart: unless-stopped
+    healthcheck:
+      test:  ["CMD-SHELL", "/home/celeryuser/.local/bin/celery -A celery_app inspect ping"]                                                                                                       # ["CMD-SHELL", "celery -A celery_app inspect ping"]  # Adjust the health check command as needed
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+   
+  beat:
+    build:
+      context: ./tasks_scheduling
+    container_name: beat_container
+    networks:
+      - test-network
+    volumes:
+      - ./tasks_scheduling:/app
+      - ./tasks_scheduling/aws-global-bundle.pem:/etc/ssl/certs/aws-global-bundle.pem:ro
+    env_file:
+      - ./.env.shared
+      - ./tasks_scheduling/.env
+    depends_on:
+      - backend
+      - postgres
+    command: /home/celeryuser/.local/bin/celery -A celery_app beat --loglevel=info --scheduler=celery.beat:PersistentScheduler                                                                                                                           # celery -A celery_app beat --loglevel=info --scheduler=celery.beat:PersistentScheduler
+    restart: unless-stopped
+    healthcheck:
+      test:  ["CMD-SHELL", "/home/celeryuser/.local/bin/celery -A celery_app inspect ping"]                                                                                                         #["CMD-SHELL", "celery -A celery_app inspect ping"]  # Adjust the health check command as needed
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+
+  celery-insights:
+    image: ghcr.io/danyi1212/celery-insights-all:latest
+    container_name: celery_insights_container
+    ports:
+      - "8555:8555"
+    networks:
+      - test-network
+    volumes:
+      - ./tasks_scheduling/aws-global-bundle.pem:/etc/ssl/certs/aws-global-bundle.pem:ro
+    # environment:
+    #   - BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    #   - RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    environment:
+      - BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=none
+      - RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=none
+    depends_on:
+      - tasks_scheduling
+      - worker
+      - beat
+    restart: unless-stopped
+
+
