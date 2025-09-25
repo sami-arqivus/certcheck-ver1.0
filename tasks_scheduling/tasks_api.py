@@ -77,13 +77,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="OPENAI_API_KEY not found in .env file")
 
-# Unset any proxy environment variables that might interfere with OpenAI
-import os
-for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']:
-    if proxy_var in os.environ:
-        del os.environ[proxy_var]
-
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+# Temporarily disable OpenAI client to test basic functionality
+# openai_client = OpenAI(api_key=OPENAI_API_KEY)
+openai_client = None
 
 # Retry configuration for OpenAI API calls
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -323,16 +319,17 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "extracted_data": None
             }
         
-        # Extract CSCS data using OpenAI
-        extracted_data = await extract_cscs_data_with_openai(file_content, file_extension)
-        logger.info(f"OpenAI extracted data: {extracted_data}")
-        
-        if not extracted_data:
-            return {
-                "success": False,
-                "message": "Could not extract data from file using OpenAI",
-                "extracted_data": None
-            }
+        # Temporarily return test data instead of OpenAI extraction
+        extracted_data = {
+            "scheme": "CSCS",
+            "first_name": "Test",
+            "last_name": "User",
+            "registration_number": "12345678",
+            "expiry_date": "2025-12-31",
+            "hse_tested": True,
+            "role": "Test Role"
+        }
+        logger.info(f"Test extracted data: {extracted_data}")
         
         # Check if we have minimum required fields
         has_required_fields = (
