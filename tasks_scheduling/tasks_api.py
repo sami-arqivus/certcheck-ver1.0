@@ -319,31 +319,31 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "extracted_data": None
             }
         
+        # Check if OpenAI client is available
+        if client is None:
+            # Return test data when OpenAI client is disabled
+            logger.info("OpenAI client disabled, returning test data")
+            extracted_data = {
+                "scheme": "CSCS",
+                "first_name": "Test",
+                "last_name": "User",
+                "registration_number": "12345678",
+                "expiry_date": "2025-12-31",
+                "hse_tested": True,
+                "role": "Test Role"
+            }
+            return {
+                "success": True,
+                "message": "Test data extracted (OpenAI disabled)",
+                "extracted_data": extracted_data
+            }
+        
         # Create temporary file for processing
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
             temp_file.write(file_content)
             temp_image_path = temp_file.name
 
         try:
-            # Check if OpenAI client is available
-            if client is None:
-                # Return test data when OpenAI client is disabled
-                logger.info("OpenAI client disabled, returning test data")
-                extracted_data = {
-                    "scheme": "CSCS",
-                    "first_name": "Test",
-                    "last_name": "User",
-                    "registration_number": "12345678",
-                    "expiry_date": "2025-12-31",
-                    "hse_tested": True,
-                    "role": "Test Role"
-                }
-                return {
-                    "success": True,
-                    "message": "Test data extracted (OpenAI disabled)",
-                    "extracted_data": extracted_data
-                }
-            
             input_content = [
                 {
                     "type": "input_text",
@@ -406,6 +406,13 @@ async def ocr_extract(file: UploadFile = File(...)):
             # Clean up temporary file
             if os.path.exists(temp_image_path):
                 os.unlink(temp_image_path)
+    except Exception as e:
+        logger.error(f"OCR extraction failed: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error processing file: {str(e)}",
+            "extracted_data": None
+        }
 
 @app.post("/bulk-verify-cards/")
 async def bulk_verify_cards(files: list[UploadFile] = File(...)):
