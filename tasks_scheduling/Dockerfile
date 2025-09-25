@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Playwright and browsers
 RUN pip install --no-cache-dir --user playwright
+ENV PATH="/root/.local/bin:${PATH}"
 RUN playwright install chromium
 
 RUN useradd -m celeryuser -u 1000 && \
