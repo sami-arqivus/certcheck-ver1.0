@@ -7,7 +7,7 @@ load_dotenv()
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Dict, Any
 import asyncio
-from playwright.async_api import async_playwright, Error
+# Playwright removed - not needed for bulk verification
 from fastapi import HTTPException
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -150,104 +150,105 @@ async def extract_active_cards_from_page(page) -> List[Dict[str, Any]]:
     return cards_data
 
 
-async def validate_cscs_certification(ws_endpoint: str, request: ValidationRequest, debug_screenshot: bool = True):
-    async with async_playwright() as pw:
-        max_connect_retries = 3
-        for attempt in range(max_connect_retries):
-            try:
-                logger.info(f"Attempt {attempt + 1} to connect to remote browser via: {ws_endpoint}")
-                browser = await pw.chromium.connect_over_cdp(ws_endpoint)
-                break
-            except Exception as e:
-                logger.warning(f"Failed to connect to remote browser (attempt {attempt + 1}): {e}")
-                if attempt + 1 == max_connect_retries:
-                    logger.error(f"Exhausted {max_connect_retries} attempts to connect to remote browser")
-                    raise RuntimeError(f"Failed to connect to remote browser after {max_connect_retries} attempts: {e}")
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        contexts = browser.contexts
-        if not contexts:
-            raise RuntimeError("No existing contexts available in remote browser")
-        context = contexts[0]
-        await context.clear_cookies()
-        await context.clear_permissions()
-        try:
-            await context.grant_permissions(['geolocation'])
-            await context.set_geolocation({"latitude": 51.5074, "longitude": -0.1278})
-        except Exception as e:
-            logger.warning(f"Failed to set geolocation: {e}. Proceeding without.")
-        
-        page = await context.new_page()
-        try:
-            response = await page.goto(TARGET_URL, timeout=60000)
-            await page.wait_for_load_state("load", timeout=30000)
-            if response:
-                logger.info(f"Initial navigation HTTP status: {response.status}")
-            else:
-                logger.info("No response object on initial navigation (remote browser may not provide it).")
-            scheme_input_selector = '#\\:r0\\:'
-            try:
-                await page.wait_for_selector(scheme_input_selector, timeout=10000)
-                await page.click(scheme_input_selector)
-                await page.fill(scheme_input_selector, request.scheme)
-                await page.wait_for_timeout(1000)
-                option = page.get_by_role("option", name=request.scheme.upper(), exact=False)
-                try:
-                    await option.click(timeout=5000)
-                except Exception as e:
-                    logger.warning(f"Failed to click scheme option: {e}. Selecting first available option.")
-                    opts = await page.query_selector_all("li[role='option']")
-                    if opts:
-                        await opts[0].click()
-            except Exception as e:
-                logger.warning(f"Could not fill scheme via primary selector: {e}. Trying text input fallback.")
-                await page.keyboard.type(request.scheme)
-                await page.wait_for_timeout(300)
-
-            try:
-                await page.fill('input[placeholder="Enter registration number"]', request.registration_number, timeout=10000)
-            except Exception as e:
-                logger.error(f"Failed filling registration number input: {e}")
-            try:
-                await page.fill('input[placeholder="Enter last name"]', request.last_name, timeout=10000)
-            except Exception as e:
-                logger.error(f"Failed filling last name input: {e}")
-
-            await page.wait_for_timeout(1000)
-
-            try:
-                btn = page.get_by_role("button", name="Check Card")
-                await btn.click(timeout=8000)
-            except Exception as e:
-                logger.warning(f"Failed to click Check Card button via role: {e}. Trying alternative selector.")
-                try:
-                    await page.click("button:has-text('Check Card')", timeout=8000)
-                except Exception as inner_e:
-                    logger.error(f"Failed to click Check Card button: {inner_e}")
-
-            await page.wait_for_timeout(10000)
-            try:
-                await page.wait_for_selector("div.MuiStack-root.css-xjqfxa, div.card, div.result", timeout=15000)
-            except Exception as e:
-                logger.warning(f"Result selector not found within timeout: {e}")
-
-            cards = await extract_active_cards_from_page(page)
-            try:
-                await context.close()
-            except Exception as e:
-                logger.warning(f"Failed to close context: {e}")
-            return {"success": True, "cards_data": cards}
-        except Error as e:
-            logger.error(f"Playwright error during interaction: {e}")
-            try:
-                await context.close()
-            except Exception as inner_e:
-                logger.warning(f"Failed to close context after error: {inner_e}")
-            return {"success": False, "error": str(e)}
-        finally:
-            try:
-                await browser.close()
-            except Exception as e:
-                logger.warning(f"Failed to close browser: {e}")
+# Playwright function commented out - not needed for bulk verification
+# async def validate_cscs_certification(ws_endpoint: str, request: ValidationRequest, debug_screenshot: bool = True):
+#     async with async_playwright() as pw:
+#         max_connect_retries = 3
+#         for attempt in range(max_connect_retries):
+#             try:
+#                 logger.info(f"Attempt {attempt + 1} to connect to remote browser via: {ws_endpoint}")
+#                 browser = await pw.chromium.connect_over_cdp(ws_endpoint)
+#                 break
+#             except Exception as e:
+#                 logger.warning(f"Failed to connect to remote browser (attempt {attempt + 1}): {e}")
+#                 if attempt + 1 == max_connect_retries:
+#                     logger.error(f"Exhausted {max_connect_retries} attempts to connect to remote browser")
+#                     raise RuntimeError(f"Failed to connect to remote browser after {max_connect_retries} attempts: {e}")
+#                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
+#         contexts = browser.contexts
+#         if not contexts:
+#             raise RuntimeError("No existing contexts available in remote browser")
+#         context = contexts[0]
+#         await context.clear_cookies()
+#         await context.clear_permissions()
+#         try:
+#             await context.grant_permissions(['geolocation'])
+#             await context.set_geolocation({"latitude": 51.5074, "longitude": -0.1278})
+#         except Exception as e:
+#             logger.warning(f"Failed to set geolocation: {e}. Proceeding without.")
+#         
+#         page = await context.new_page()
+#         try:
+#             response = await page.goto(TARGET_URL, timeout=60000)
+#             await page.wait_for_load_state("load", timeout=30000)
+#             if response:
+#                 logger.info(f"Initial navigation HTTP status: {response.status}")
+#             else:
+#                 logger.info("No response object on initial navigation (remote browser may not provide it).")
+#             scheme_input_selector = '#\\:r0\\:'
+#             try:
+#                 await page.wait_for_selector(scheme_input_selector, timeout=10000)
+#                 await page.click(scheme_input_selector)
+#                 await page.fill(scheme_input_selector, request.scheme)
+#                 await page.wait_for_timeout(1000)
+#                 option = page.get_by_role("option", name=request.scheme.upper(), exact=False)
+#                 try:
+#                     await option.click(timeout=5000)
+#                 except Exception as e:
+#                     logger.warning(f"Failed to click scheme option: {e}. Selecting first available option.")
+#                     opts = await page.query_selector_all("li[role='option']")
+#                     if opts:
+#                         await opts[0].click()
+#             except Exception as e:
+#                 logger.warning(f"Could not fill scheme via primary selector: {e}. Trying text input fallback.")
+#                 await page.keyboard.type(request.scheme)
+#                 await page.wait_for_timeout(300)
+# 
+#             try:
+#                 await page.fill('input[placeholder="Enter registration number"]', request.registration_number, timeout=10000)
+#             except Exception as e:
+#                 logger.error(f"Failed filling registration number input: {e}")
+#             try:
+#                 await page.fill('input[placeholder="Enter last name"]', request.last_name, timeout=10000)
+#             except Exception as e:
+#                 logger.error(f"Failed filling last name input: {e}")
+# 
+#             await page.wait_for_timeout(1000)
+# 
+#             try:
+#                 btn = page.get_by_role("button", name="Check Card")
+#                 await btn.click(timeout=8000)
+#             except Exception as e:
+#                 logger.warning(f"Failed to click Check Card button via role: {e}. Trying alternative selector.")
+#                 try:
+#                     await page.click("button:has-text('Check Card')", timeout=8000)
+#                 except Exception as inner_e:
+#                     logger.error(f"Failed to click Check Card button: {inner_e}")
+# 
+#             await page.wait_for_timeout(10000)
+#             try:
+#                 await page.wait_for_selector("div.MuiStack-root.css-xjqfxa, div.card, div.result", timeout=15000)
+#             except Exception as e:
+#                 logger.warning(f"Result selector not found within timeout: {e}")
+# 
+#             cards = await extract_active_cards_from_page(page)
+#             try:
+#                 await context.close()
+#             except Exception as e:
+#                 logger.warning(f"Failed to close context: {e}")
+#             return {"success": True, "cards_data": cards}
+#         except Error as e:
+#             logger.error(f"Playwright error during interaction: {e}")
+#             try:
+#                 await context.close()
+#             except Exception as inner_e:
+#                 logger.warning(f"Failed to close context after error: {inner_e}")
+#             return {"success": False, "error": str(e)}
+#         finally:
+#             try:
+#                 await browser.close()
+#             except Exception as e:
+#                 logger.warning(f"Failed to close browser: {e}")
 
 class DatabaseInsertionError(Exception):
     """Custom exception for database insertion errors."""
