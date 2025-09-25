@@ -26,6 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install Playwright and browsers
+RUN pip install --no-cache-dir --user playwright
+RUN playwright install chromium
+
 RUN useradd -m celeryuser -u 1000 && \
     mkdir -p /app /etc/ssl/certs && \
     chown -R celeryuser:celeryuser /app

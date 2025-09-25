@@ -398,24 +398,34 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
     
     for file in files:
         try:
-            # Use internal OCR extraction
+            # Step 1: Use internal OCR extraction (same as cert-to-json)
             ocr_result = await ocr_extract(file)
             
             if ocr_result["success"] and ocr_result.get("has_required_fields"):
                 extracted_data = ocr_result["extracted_data"]
                 
-                # For bulk verification, we'll just return the OCR results
-                # The actual validation can be done manually if needed
+                # Step 2: Call admin validation task with the extracted data
+                validation_request = {
+                    "scheme": extracted_data.get("scheme", ""),
+                    "registration_number": extracted_data.get("registration_number", ""),
+                    "last_name": extracted_data.get("last_name", ""),
+                    "first_name": extracted_data.get("first_name", ""),
+                    "expiry_date": extracted_data.get("expiry_date"),
+                    "hse_tested": extracted_data.get("hse_tested"),
+                    "role": extracted_data.get("role")
+                }
+                
+                # Call the admin validation task
+                validation_task = admin_validate_cscs_card_task.delay(validation_request)
+                validation_result = validation_task.get(timeout=900)  # 15 minutes timeout
+                
                 results.append({
                     "filename": file.filename,
                     "file_type": file.content_type,
                     "success": True,
-                    "message": "OCR extraction successful - ready for manual verification",
+                    "message": "OCR extraction and validation completed",
                     "extracted_data": extracted_data,
-                    "validation_data": {
-                        "status": "extracted",
-                        "note": "Use manual verification for actual validation"
-                    }
+                    "validation_data": validation_result
                 })
             else:
                 results.append({
