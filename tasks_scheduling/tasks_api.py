@@ -77,11 +77,13 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="OPENAI_API_KEY not found in .env file")
 
-import httpx
+# Unset any proxy environment variables that might interfere with OpenAI
+import os
+for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']:
+    if proxy_var in os.environ:
+        del os.environ[proxy_var]
 
-# Create a custom HTTP client without proxy settings
-http_client = httpx.Client(proxies=None)
-openai_client = OpenAI(api_key=OPENAI_API_KEY, http_client=http_client)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Retry configuration for OpenAI API calls
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
