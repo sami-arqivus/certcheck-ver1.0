@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ffmpeg \
     valkey-tools \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m celeryuser -u 1000 && \
