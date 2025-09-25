@@ -77,9 +77,15 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="OPENAI_API_KEY not found in .env file")
 
-# Temporarily disable OpenAI client to test basic functionality
-# openai_client = OpenAI(api_key=OPENAI_API_KEY)
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Initialize OpenAI client with error handling for proxy conflicts
+try:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+except TypeError as e:
+    if "proxies" in str(e):
+        # Fallback: create client without any additional parameters
+        client = OpenAI(api_key=OPENAI_API_KEY, http_client=None)
+    else:
+        raise e
 
 # Retry configuration for OpenAI API calls
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type                   # type: ignore[import-untyped]
