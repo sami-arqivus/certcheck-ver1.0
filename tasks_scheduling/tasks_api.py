@@ -175,8 +175,16 @@ async def get_admin_validation_result(task_id: str):
 def extract_text_from_image(image_bytes: bytes) -> str:
     """Extract text from image using OCR"""
     try:
+        # Check if we have valid image data
+        if not image_bytes or len(image_bytes) == 0:
+            logger.error("Empty image data provided")
+            return ""
+        
+        logger.info(f"Processing image with {len(image_bytes)} bytes")
+        
         # Convert bytes to PIL Image
         image = Image.open(io.BytesIO(image_bytes))
+        logger.info(f"Image opened successfully: {image.size}, mode: {image.mode}")
         
         # Convert to RGB if necessary
         if image.mode != 'RGB':
@@ -197,8 +205,10 @@ def extract_text_from_image(image_bytes: bytes) -> str:
             try:
                 text = pytesseract.image_to_string(image, config=f'--psm {psm}')
                 if text.strip():
+                    logger.info(f"OCR successful with PSM {psm}, extracted {len(text)} characters")
                     break
-            except:
+            except Exception as ocr_error:
+                logger.warning(f"OCR failed with PSM {psm}: {str(ocr_error)}")
                 continue
         
         return text.strip()
@@ -293,14 +303,28 @@ async def ocr_extract(file: UploadFile = File(...)):
     Extract text and parse CSCS card data from uploaded file
     """
     try:
+        logger.info(f"Processing file: {file.filename}, content_type: {file.content_type}, size: {file.size}")
+        
         # Read file content
         file_content = await file.read()
+        logger.info(f"Read {len(file_content)} bytes from file")
+        
+        if not file_content:
+            return {
+                "success": False,
+                "message": "File is empty or could not be read",
+                "extracted_data": None
+            }
         
         # Determine file type and extract text
         if file.content_type and 'pdf' in file.content_type.lower():
+            logger.info("Processing as PDF")
             text = extract_text_from_pdf(file_content)
         else:
+            logger.info("Processing as image")
             text = extract_text_from_image(file_content)
+        
+        logger.info(f"Extracted text length: {len(text) if text else 0}")
         
         if not text:
             return {
@@ -311,6 +335,7 @@ async def ocr_extract(file: UploadFile = File(...)):
         
         # Parse CSCS card data
         parsed_data = parse_cscs_data(text)
+        logger.info(f"Parsed data: {parsed_data}")
         
         # Check if we have minimum required fields
         has_required_fields = (
