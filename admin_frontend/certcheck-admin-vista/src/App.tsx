@@ -15,6 +15,7 @@ import PendingEmployees from "./pages/PendingEmployees";
 import CSCSCardDetails from "./pages/CSCSCardDetails";
 import FilteredCSCSCards from "./pages/FilteredCSCSCards";
 import VerifyCard from "./pages/VerifyCard";
+import BulkVerify from "./pages/BulkVerify";
 import UserProfile from "./pages/UserProfile";
 import DashboardLayout from "./layouts/DashboardLayout";
 import NotFound from "./pages/NotFound";
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="cscs-cards" element={<CSCSCardDetails />} />
               <Route path="filtered-cscs" element={<FilteredCSCSCards />} />
               <Route path="verify-card" element={<VerifyCard />} />
+              <Route path="bulk-verify" element={<BulkVerify />} />
               <Route path="profile/:refId" element={<UserProfile />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -1,4 +1,4 @@
-import { Users, UserCheck, UserX, Clock, Activity, FileText } from "lucide-react";
+import { Users, UserCheck, UserX, Clock, Activity, FileText, Upload } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import {
@@ -23,6 +23,7 @@ const items = [
   { title: "All CSCS Card Details", url: "/dashboard/cscs-cards", icon: Users },
   { title: "Filtered CSCS Cards", url: "/dashboard/filtered-cscs", icon: Users },
   { title: "Verify Card", url: "/dashboard/verify-card", icon: FileText },
+  { title: "Bulk Verify", url: "/dashboard/bulk-verify", icon: Upload },
 ];
 
 export function AppSidebar() {
