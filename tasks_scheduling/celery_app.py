@@ -6,12 +6,12 @@ import ssl
 load_dotenv()  # Load environment variables from .env file
 
 
-# broker_url = os.getenv('CELERY_BROKER_URL', 'rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
-# result_backend = os.getenv('CELERY_RESULT_BACKEND', 'rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
+broker_url = os.getenv('CELERY_BROKER_URL', 'rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
+result_backend = os.getenv('CELERY_RESULT_BACKEND', 'rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
 
 
-broker_url = os.getenv('CELERY_BROKER_URL', 'rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
-result_backend = os.getenv('CELERY_RESULT_BACKEND', 'rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
+# broker_url = os.getenv('CELERY_BROKER_URL', 'rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
+# result_backend = os.getenv('CELERY_RESULT_BACKEND', 'rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false')
 celery_app = Celery(
     'tasks_scheduling',
     broker=broker_url,
