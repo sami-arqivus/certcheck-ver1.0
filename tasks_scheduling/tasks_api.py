@@ -350,40 +350,19 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
             if ocr_result["success"] and ocr_result.get("has_required_fields"):
                 extracted_data = ocr_result["extracted_data"]
                 
-                # Call admin validation using the existing endpoint
-                try:
-                    validation_response = await admin_validate_cscs_card_task.delay(
-                        scheme=extracted_data["scheme"],
-                        registration_number=extracted_data["registration_number"],
-                        last_name=extracted_data["last_name"],
-                        first_name=extracted_data.get("first_name"),
-                        expiry_date=extracted_data.get("expiry_date"),
-                        hse_tested=None,
-                        role=None
-                    )
-                    
-                    # Wait for result (with timeout)
-                    validation_result = validation_response.get(timeout=300)  # 5 minute timeout
-                    
-                    results.append({
-                        "filename": file.filename,
-                        "file_type": file.content_type,
-                        "success": True,
-                        "message": "Verification successful",
-                        "extracted_data": extracted_data,
-                        "validation_data": validation_result,
-                        "task_id": str(validation_response.id)
-                    })
-                    
-                except Exception as validation_error:
-                    results.append({
-                        "filename": file.filename,
-                        "file_type": file.content_type,
-                        "success": False,
-                        "message": f"Validation failed: {str(validation_error)}",
-                        "extracted_data": extracted_data,
-                        "validation_data": None
-                    })
+                # For bulk verification, we'll just return the OCR results
+                # The actual validation can be done manually if needed
+                results.append({
+                    "filename": file.filename,
+                    "file_type": file.content_type,
+                    "success": True,
+                    "message": "OCR extraction successful - ready for manual verification",
+                    "extracted_data": extracted_data,
+                    "validation_data": {
+                        "status": "extracted",
+                        "note": "Use manual verification for actual validation"
+                    }
+                })
             else:
                 results.append({
                     "filename": file.filename,
