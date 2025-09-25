@@ -33,6 +33,10 @@ import pytesseract
 import fitz  # PyMuPDF for PDF processing
 import io
 import re
+from openai import OpenAI
+from pdf2image import convert_from_path
+import tempfile
+from pathlib import Path
 
 
 app = FastAPI(title = "Task scheduler API", description = "This API is used to schedule tasks using Celery.")
@@ -58,6 +62,39 @@ class ValidationRequest(BaseModel):
 class TaskResponse(BaseModel):
     task_id: str
     status: str
+
+class CSCSCardJson(BaseModel):
+    scheme: str
+    first_name: str
+    last_name: str
+    registration_number: str
+    expiry_date: str
+    hse_tested: bool
+    role: str
+
+# Initialize OpenAI client
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise HTTPException(status_code=500, detail="OPENAI_API_KEY not found in .env file")
+
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Retry configuration for OpenAI API calls
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from openai import APIError
+
+@retry(
+    stop=stop_after_attempt(10),  # Retry up to 10 times
+    wait=wait_exponential(multiplier=1, min=4, max=60),  # Exponential backoff: 4s, 8s, 16s, ..., up to 60s
+    retry=retry_if_exception_type((APIError, httpx.HTTPError)),  # Retry on OpenAI or network errors
+    before_sleep=lambda retry_state: logger.info(f"Retrying OpenAI API call: attempt {retry_state.attempt_number}, error: {retry_state.outcome.exception()}")
+)
+async def call_openai_parse(client, model, input_data):
+    return client.responses.parse(model=model, input=input_data, text_format=CSCSCardJson)
+
+def encode_image(image_file):
+    """Encode image file to base64 string."""
+    return base64.b64encode(image_file.read()).decode("utf-8")
 
 broker_url = os.getenv('CELERY_BROKER_URL')
 # broker_url = 'rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false'
@@ -172,157 +209,87 @@ async def get_admin_validation_result(task_id: str):
         logger.error(f"Failed to get task result: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-def extract_text_from_image(image_bytes: bytes) -> str:
-    """Extract text from image using OCR"""
+async def extract_cscs_data_with_openai(file_content: bytes, file_extension: str) -> dict:
+    """Extract CSCS card data using OpenAI GPT-4.1 vision model"""
     try:
-        # Check if we have valid image data
-        if not image_bytes or len(image_bytes) == 0:
-            logger.error("Empty image data provided")
-            return ""
+        logger.info(f"Processing file with OpenAI GPT-4.1: {len(file_content)} bytes, extension: {file_extension}")
         
-        logger.info(f"Processing image with {len(image_bytes)} bytes")
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = temp_file.name
         
-        # Convert bytes to PIL Image
-        image = Image.open(io.BytesIO(image_bytes))
-        logger.info(f"Image opened successfully: {image.size}, mode: {image.mode}")
-        
-        # Convert to RGB if necessary
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # Convert to grayscale for better OCR
-        if image.mode != 'L':
-            image = image.convert('L')
-        
-        # Enhance contrast
-        from PIL import ImageEnhance
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(2.0)
-        
-        # Extract text using Tesseract with multiple PSM modes
-        text = ""
-        for psm in [6, 3, 4]:  # Try different page segmentation modes
-            try:
-                text = pytesseract.image_to_string(image, config=f'--psm {psm}')
-                if text.strip():
-                    logger.info(f"OCR successful with PSM {psm}, extracted {len(text)} characters")
-                    break
-            except Exception as ocr_error:
-                logger.warning(f"OCR failed with PSM {psm}: {str(ocr_error)}")
-                continue
-        
-        return text.strip()
-    except Exception as e:
-        logger.error(f"OCR extraction failed: {str(e)}")
-        return ""
-
-def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF - handles both text-based and scanned PDFs"""
-    try:
-        logger.info(f"Opening PDF with {len(pdf_bytes)} bytes")
-        pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
-        logger.info(f"PDF opened successfully, page count: {pdf_document.page_count}")
-        
-        text = ""
-        for page_num in range(pdf_document.page_count):
-            page = pdf_document[page_num]
-            page_text = page.get_text()
-            logger.info(f"Page {page_num + 1} text length: {len(page_text)}")
+        try:
+            input_content = [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Imagine You are an expert in extracting data from CSCS card (UK Construction Skills Certification Scheme) that is needed to validate the candidate. "
+                        "You have to select 1 scheme that the card belongs to from the following list: [ACAD, ACE, ADIA, ADSA(DHF), ALLMI, AMI, Allianz UK, BFBi, British Engineering Services, CCDO,CISRS, CPCS, CSCS, CSR, CSWIP, DSA, ECS (JIB), ECS (SJIB), EUSR, Engineering Services Skillcard, FASET, FISS, GEA, HSB, ICATS, IEXPE, IPAF, JIB PMES, LEEA, LISS, Llyods British, MPQC, NPORS, PASMA, Q-card, SAFed, SEIRS, SICCS, SNIJIB, TICA, TTM, Train the painter]"
+                        "Extract expiry date in str format not in datetime.data(). "
+                    ),
+                }
+            ]
             
-            # If no text found, try OCR on the page image
-            if not page_text.strip():
-                logger.info(f"No text found on page {page_num + 1}, trying OCR...")
+            if file_extension in ["png", "jpg", "jpeg"]:
+                with open(temp_file_path, "rb") as image_file:
+                    base64_image = encode_image(image_file)
+                input_content.append({
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{base64_image}",
+                })
+            elif file_extension == "pdf":
                 try:
-                    # Convert page to image
-                    mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better OCR
-                    pix = page.get_pixmap(matrix=mat)
-                    img_data = pix.tobytes("png")
-                    
-                    # Use OCR on the image
-                    page_text = extract_text_from_image(img_data)
-                    logger.info(f"OCR on page {page_num + 1} extracted {len(page_text)} characters")
-                except Exception as ocr_error:
-                    logger.warning(f"OCR failed on page {page_num + 1}: {str(ocr_error)}")
-                    page_text = ""
-            
-            text += page_text
-        
-        pdf_document.close()
-        logger.info(f"Total extracted text length: {len(text)}")
-        return text.strip()
-    except Exception as e:
-        logger.error(f"PDF extraction failed: {str(e)}")
-        return ""
+                    images = convert_from_path(temp_file_path)
+                    if not images:
+                        raise HTTPException(status_code=400, detail="No images found in the PDF")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image_file:
+                        images[0].save(temp_image_file.name, "JPEG")
+                        with open(temp_image_file.name, "rb") as image_file:
+                            base64_image = encode_image(image_file)
+                        os.unlink(temp_image_file.name) 
+                    input_content.append({
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{base64_image}",
+                    })
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Failed to extract images from PDF: {str(e)}")
 
-def parse_cscs_data(text: str) -> dict:
-    """Parse CSCS card data from extracted text"""
-    try:
-        # Common CSCS card patterns
-        data = {
-            "scheme": None,
-            "registration_number": None,
-            "last_name": None,
-            "first_name": None,
-            "expiry_date": None,
-            "hse_tested": None,
-            "role": None
-        }
-        
-        # Convert to uppercase for pattern matching
-        text_upper = text.upper()
-        
-        # Extract scheme (CPCS, CSCS, etc.)
-        scheme_patterns = [r'CPCS', r'CSCS', r'CITB']
-        for pattern in scheme_patterns:
-            if re.search(pattern, text_upper):
-                data["scheme"] = re.search(pattern, text_upper).group()
-                break
-        
-        # Extract registration number (usually 8 digits)
-        reg_pattern = r'(\d{8,})'
-        reg_match = re.search(reg_pattern, text)
-        if reg_match:
-            data["registration_number"] = reg_match.group(1)
-        
-        # Extract names (look for common name patterns)
-        name_patterns = [
-            r'([A-Z][A-Z\s]+)',  # All caps names
-            r'([A-Z][a-z]+\s+[A-Z][a-z]+)',  # Proper case names
-        ]
-        
-        for pattern in name_patterns:
-            matches = re.findall(pattern, text)
-            for match in matches:
-                if len(match.split()) >= 2:  # At least first and last name
-                    names = match.split()
-                    data["last_name"] = names[-1]  # Last word is last name
-                    data["first_name"] = names[0]  # First word is first name
-                    break
-            if data["last_name"]:
-                break
-        
-        # Extract expiry date (various date formats)
-        date_patterns = [
-            r'(\d{2}/\d{2}/\d{4})',  # DD/MM/YYYY
-            r'(\d{2}-\d{2}-\d{4})',  # DD-MM-YYYY
-            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
-        ]
-        
-        for pattern in date_patterns:
-            date_match = re.search(pattern, text)
-            if date_match:
-                data["expiry_date"] = date_match.group(1)
-                break
-        
-        return data
+            logger.info("Extracting data from certificate/card using OpenAI...")
+            input_data = [
+                {
+                    "role": "user",
+                    "content": input_content,
+                }
+            ]
+            
+            response = await call_openai_parse(
+                client=openai_client,
+                model="gpt-4.1",
+                input_data=input_data,
+            )
+            
+            cscs_response = response.output_parsed
+            logger.info(f"OpenAI Response: {cscs_response}")
+            cscs_json = cscs_response.model_dump()
+            logger.info(f"CSCS JSON: {cscs_json}")
+            
+            return cscs_json
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                
     except Exception as e:
-        logger.error(f"Data parsing failed: {str(e)}")
+        logger.error(f"OpenAI extraction failed: {str(e)}")
         return {}
+
 
 @app.post("/ocr-extract/")
 async def ocr_extract(file: UploadFile = File(...)):
     """
-    Extract text and parse CSCS card data from uploaded file
+    Extract CSCS card data using OpenAI GPT-4.1 vision model
     """
     try:
         logger.info(f"Processing file: {file.filename}, content_type: {file.content_type}, size: {file.size}")
@@ -338,51 +305,45 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "extracted_data": None
             }
         
-        # Determine file type and extract text
-        if file.content_type and 'pdf' in file.content_type.lower():
-            logger.info("Processing as PDF")
-            text = extract_text_from_pdf(file_content)
-        elif file.content_type and any(img_type in file.content_type.lower() for img_type in ['image/', 'jpeg', 'jpg', 'png', 'gif', 'bmp', 'tiff']):
-            logger.info("Processing as image")
-            text = extract_text_from_image(file_content)
-        else:
-            logger.warning(f"Unsupported file type: {file.content_type}. Skipping file.")
+        # Get file extension
+        file_extension = file.filename.split(".")[-1].lower() if file.filename else ""
+        
+        # Validate file type
+        allowed_extensions = ["png", "jpg", "jpeg", "pdf"]
+        if file_extension not in allowed_extensions:
             return {
                 "success": False,
-                "message": f"Unsupported file type: {file.content_type}. Please upload images (JPG, PNG, etc.) or PDF files.",
+                "message": f"Unsupported file type: {file_extension}. Please upload images (JPG, PNG, etc.) or PDF files.",
                 "extracted_data": None
             }
         
-        logger.info(f"Extracted text length: {len(text) if text else 0}")
+        # Extract CSCS data using OpenAI
+        extracted_data = await extract_cscs_data_with_openai(file_content, file_extension)
+        logger.info(f"OpenAI extracted data: {extracted_data}")
         
-        if not text:
+        if not extracted_data:
             return {
                 "success": False,
-                "message": "Could not extract text from file",
+                "message": "Could not extract data from file using OpenAI",
                 "extracted_data": None
             }
-        
-        # Parse CSCS card data
-        parsed_data = parse_cscs_data(text)
-        logger.info(f"Parsed data: {parsed_data}")
         
         # Check if we have minimum required fields
         has_required_fields = (
-            parsed_data.get("scheme") and 
-            parsed_data.get("registration_number") and 
-            parsed_data.get("last_name")
+            extracted_data.get("scheme") and 
+            extracted_data.get("registration_number") and 
+            extracted_data.get("last_name")
         )
         
         return {
             "success": True,
-            "message": "Text extracted successfully",
-            "extracted_data": parsed_data,
-            "raw_text": text,
+            "message": "Data extracted successfully using OpenAI GPT-4.1",
+            "extracted_data": extracted_data,
             "has_required_fields": has_required_fields
         }
         
     except Exception as e:
-        logger.error(f"OCR extraction failed: {str(e)}")
+        logger.error(f"OpenAI extraction failed: {str(e)}")
         return {
             "success": False,
             "message": f"Error processing file: {str(e)}",
@@ -392,13 +353,13 @@ async def ocr_extract(file: UploadFile = File(...)):
 @app.post("/bulk-verify-cards/")
 async def bulk_verify_cards(files: list[UploadFile] = File(...)):
     """
-    Bulk verify multiple CSCS card files using internal OCR
+    Bulk verify multiple CSCS card files using OpenAI GPT-4.1 and Playwright validation
     """
     results = []
     
     for file in files:
         try:
-            # Step 1: Use internal OCR extraction (same as cert-to-json)
+            # Step 1: Use OpenAI GPT-4.1 for data extraction (same as cert-to-json)
             ocr_result = await ocr_extract(file)
             
             if ocr_result["success"] and ocr_result.get("has_required_fields"):
@@ -423,7 +384,7 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
                     "filename": file.filename,
                     "file_type": file.content_type,
                     "success": True,
-                    "message": "OCR extraction and validation completed",
+                    "message": "OpenAI extraction and Playwright validation completed",
                     "extracted_data": extracted_data,
                     "validation_data": validation_result
                 })
@@ -449,7 +410,7 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
     
     return {
         "success": True,
-        "message": f"Processed {len(files)} files",
+        "message": f"Processed {len(files)} files using OpenAI GPT-4.1 and Playwright validation",
         "results": results,
         "summary": {
             "total": len(files),
