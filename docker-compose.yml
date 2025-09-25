@@ -228,15 +228,13 @@ services:
       - ./nginx/nginx.conf.template:/etc/nginx/conf.d/nginx.conf.template
       - ./nginx/entrypoint.sh:/entrypoint.sh 
       - ./nginx/proxy_params:/etc/nginx/proxy_params
-      # - ./nginx/certificate.crt:/etc/nginx/ssl/certificate.crt
-      # - ./nginx/private.key:/etc/nginx/ssl/private.key
-      # - ./nginx/ca_bundle.crt:/etc/nginx/ssl/ca_bundle.crt
+      - ./nginx/certificate.crt:/etc/nginx/ssl/certificate.crt
+      - ./nginx/private.key:/etc/nginx/ssl/private.key
+      - ./nginx/ca_bundle.crt:/etc/nginx/ssl/ca_bundle.crt
       - ./nginx/.well-known:/usr/share/nginx/html/.well-known
       # - ./frontend/certcheck-v1/dist:/usr/share/nginx/html/frontend
       # - ./frontend/certcheck-v1/dist:/usr/share/nginx/html
       # - ./admin_frontend/certcheck-admin-vista/dist:/usr/share/nginx/admin-dist
-      - ./nginx/cert.pem:/etc/nginx/ssl/cert.pem
-      - ./nginx/key.pem:/etc/nginx/ssl/key.pem
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     depends_on:
       - login_register_user
@@ -329,12 +327,12 @@ services:
       - test-network
     volumes:
       - ./tasks_scheduling/aws-global-bundle.pem:/etc/ssl/certs/aws-global-bundle.pem:ro
-    # environment:
-    #   - BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
-    #   - RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    env_file:
+      - ./.env.shared
+      - ./tasks_scheduling/.env
     environment:
-      - BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=none
-      - RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=none
+      - BROKER_URL=${BROKER_URL}
+      - RESULT_BACKEND=${RESULT_BACKEND}
     depends_on:
       - tasks_scheduling
       - worker
