@@ -320,9 +320,16 @@ async def ocr_extract(file: UploadFile = File(...)):
         if file.content_type and 'pdf' in file.content_type.lower():
             logger.info("Processing as PDF")
             text = extract_text_from_pdf(file_content)
-        else:
+        elif file.content_type and any(img_type in file.content_type.lower() for img_type in ['image/', 'jpeg', 'jpg', 'png', 'gif', 'bmp', 'tiff']):
             logger.info("Processing as image")
             text = extract_text_from_image(file_content)
+        else:
+            logger.warning(f"Unsupported file type: {file.content_type}. Skipping file.")
+            return {
+                "success": False,
+                "message": f"Unsupported file type: {file.content_type}. Please upload images (JPG, PNG, etc.) or PDF files.",
+                "extracted_data": None
+            }
         
         logger.info(f"Extracted text length: {len(text) if text else 0}")
         
