@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and browsers
+# Install Playwright and browsers for root
 RUN pip install --no-cache-dir --user playwright
 ENV PATH="/root/.local/bin:${PATH}"
 RUN playwright install chromium
@@ -39,6 +39,12 @@ RUN curl -sSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem 
     mv /app/aws-global-bundle.pem /etc/ssl/certs/aws-global-bundle.pem && \
     chown root:root /etc/ssl/certs/aws-global-bundle.pem && \
     chmod 644 /etc/ssl/certs/aws-global-bundle.pem
+
+# Switch to celeryuser and install Playwright for worker
+USER celeryuser
+RUN pip install --no-cache-dir --user playwright
+ENV PATH="/home/celeryuser/.local/bin:${PATH}"
+RUN playwright install chromium
 
 # COPY aws-global-bundle.pem /etc/ssl/certs/aws-global-bundle.pem
 # RUN chown root:root /etc/ssl/certs/aws-global-bundle.pem && \
