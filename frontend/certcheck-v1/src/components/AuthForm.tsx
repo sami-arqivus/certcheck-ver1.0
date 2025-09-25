@@ -69,7 +69,7 @@ const AuthForm = () => {
       // });
 
       
-      const response = await axios.post('https://localhost/forgot-password/', {
+      const response = await axios.post('https://54.159.160.253/forgot-password/', {
         email,
         recaptcha_token: recaptchaToken
       }, {
@@ -136,7 +136,7 @@ const AuthForm = () => {
           //   },
           // });
 
-      const response = await axios.post(`https://localhost${endpoint}`, payload, {
+      const response = await axios.post(`https://54.159.160.253${endpoint}`, payload, {
         headers: {
           'Content-Type': 'application/json',
         },

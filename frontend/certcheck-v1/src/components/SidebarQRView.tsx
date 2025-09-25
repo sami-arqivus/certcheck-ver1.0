@@ -51,7 +51,7 @@ export function SidebarQRView() {
       fetchUserProfile(token).then((profile) => {
         if (profile) {
           setUserProfile(profile);
-          const url = `http://localhost/public-profile/${profile.id}`;
+          const url = `https://54.159.160.253/public-profile/${profile.id}`;
           setPublicUrl(url);
           // Removed generateQRCode(url) call from here
         }

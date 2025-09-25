@@ -45,9 +45,7 @@ if not AWS_ACCESS_KEY or not AWS_SECRET_ACCESS_KEY:
 
 app = FastAPI(title="ALL AWS API CALLS")
 origins = [
-    "http://localhost:8080",
-    "http://localhost:8081",
-    "http://localhost:8000",
+    "https://54.159.160.253",
 ]
 
 app.add_middleware(
@@ -458,7 +456,7 @@ async def store_invitation_details(employee_data: EmployeeData, db: psycopg2.ext
         
         gen_uuid = str(uuid.uuid4())
         consent = False
-        invite_link = f"http://localhost:8080/login?consent={consent}&ref_id={gen_uuid}"
+        invite_link = f"https://54.159.160.253/login?consent={consent}&ref_id={gen_uuid}"
         
         cursor = db.cursor()
         

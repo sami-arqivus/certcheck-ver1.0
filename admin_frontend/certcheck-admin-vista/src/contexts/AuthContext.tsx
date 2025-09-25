@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      const response = await axios.post('https://localhost/admin-login', {
+      const response = await axios.post('https://54.159.160.253/admin-login', {
         username : email,
         password,
       });

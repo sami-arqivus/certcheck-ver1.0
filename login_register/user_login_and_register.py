@@ -141,10 +141,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 # lifespan=lifespan
 app = FastAPI()
 
-# origins = [
-#     "http://localhost:8080",
-#     "http://localhost:8081", 
-# ]
+origins = [
+    "https://54.159.160.253",
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -512,8 +511,7 @@ async def forget_password(request: ForgotPasswordRequest ,conn=Depends(get_db)):
             raise HTTPException(status_code=404, detail="User not found")
 
         reset_token = create_access_token(data={"sub": email}, expires_delta=timedelta(hours=1))
-        reset_link = f"https://localhost/reset-password?token={reset_token}"
-        # reset_link = f"http://54.159.160.253/reset-password?token={reset_token}"
+        reset_link = f"https://54.159.160.253/reset-password?token={reset_token}"
         # Here you would send the reset link via email using your preferred email service
         print(f"Password reset link (send this via email): {reset_link}")
         return {"success":True,"message": "Password reset link has been sent to your email."}

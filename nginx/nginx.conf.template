@@ -1,7 +1,7 @@
 server {
     listen 80;
-    server_name localhost;
-    # server_name 54.159.160.253;
+    # server_name localhost;
+    server_name 54.159.160.253;
 
     # location /.well-known/acme-challenge/ {
     #     root /usr/share/nginx/html;
@@ -30,15 +30,15 @@ server {
 
 server {
     listen 443 ssl;
-    server_name localhost;
-    # server_name 54.159.160.253;
+    # server_name localhost;
+    server_name 54.159.160.253;
 
     client_max_body_size 50m;
-    # ssl_certificate /etc/nginx/ssl/certificate.crt;
-    # ssl_certificate_key /etc/nginx/ssl/private.key;
-    # ssl_trusted_certificate /etc/nginx/ssl/ca_bundle.crt;
-    ssl_certificate /etc/nginx/ssl/cert.pem;
-    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    ssl_certificate /etc/nginx/ssl/certificate.crt;
+    ssl_certificate_key /etc/nginx/ssl/private.key;
+    ssl_trusted_certificate /etc/nginx/ssl/ca_bundle.crt;
+    # ssl_certificate /etc/nginx/ssl/cert.pem;
+    # ssl_certificate_key /etc/nginx/ssl/key.pem;
 
     access_log /var/log/nginx/access.log;
     error_log /var/log/nginx/error.log debug;

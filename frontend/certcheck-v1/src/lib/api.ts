@@ -115,8 +115,8 @@ class ApiClient {
         this.baseURL = 'https://10.0.2.2';
         break;
       case 'ios':
-        // iOS simulator uses localhost
-        this.baseURL = 'https://localhost';
+        // iOS simulator uses production endpoint in prod builds
+        this.baseURL = 'https://54.159.160.253';
         break;
       case 'web':
       default:
