@@ -28,8 +28,6 @@ from urllib.parse import urlparse
 from celery.result import AsyncResult
 import httpx
 import base64
-import cv2
-import numpy as np
 from PIL import Image
 import pytesseract
 import fitz  # PyMuPDF for PDF processing
@@ -184,20 +182,24 @@ def extract_text_from_image(image_bytes: bytes) -> str:
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Convert PIL to OpenCV format
-        opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        # Convert to grayscale for better OCR
+        if image.mode != 'L':
+            image = image.convert('L')
         
-        # Preprocess image for better OCR
-        gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+        # Enhance contrast
+        from PIL import ImageEnhance
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(2.0)
         
-        # Apply denoising
-        denoised = cv2.fastNlMeansDenoising(gray)
-        
-        # Apply thresholding
-        _, thresh = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        
-        # Extract text using Tesseract
-        text = pytesseract.image_to_string(thresh, config='--psm 6')
+        # Extract text using Tesseract with multiple PSM modes
+        text = ""
+        for psm in [6, 3, 4]:  # Try different page segmentation modes
+            try:
+                text = pytesseract.image_to_string(image, config=f'--psm {psm}')
+                if text.strip():
+                    break
+            except:
+                continue
         
         return text.strip()
     except Exception as e:
