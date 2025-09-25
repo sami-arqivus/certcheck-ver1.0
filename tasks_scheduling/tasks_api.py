@@ -400,14 +400,12 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "message": "OpenAI extraction completed",
                 "extracted_data": cscs_json
             }
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
-    finally:
-        # Clean up temporary file
-        if os.path.exists(temp_image_path):
-            os.unlink(temp_image_path)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_image_path):
+                os.unlink(temp_image_path)
 
 @app.post("/bulk-verify-cards/")
 async def bulk_verify_cards(files: list[UploadFile] = File(...)):
