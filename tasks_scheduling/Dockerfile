@@ -45,11 +45,8 @@ COPY requirements.txt .
 
 
 RUN pip install --no-cache-dir --user -r requirements.txt --default-timeout=1000
-RUN pip install --no-cache-dir --user playwright
-# RUN pip install --no-cache-dir --user playwright-recaptcha
 
 ENV PATH="/home/celeryuser/.local/bin:${PATH}"
-RUN playwright install
 
 
 COPY . .
