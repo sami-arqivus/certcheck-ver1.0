@@ -79,11 +79,11 @@ if not OPENAI_API_KEY:
 
 # Temporarily disable OpenAI client to test basic functionality
 # openai_client = OpenAI(api_key=OPENAI_API_KEY)
-openai_client = None
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Retry configuration for OpenAI API calls
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from openai import APIError
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type                   # type: ignore[import-untyped]
+from openai import APIError                                                                                 # type: ignore[import-untyped]
 
 @retry(
     stop=stop_after_attempt(10),  # Retry up to 10 times
@@ -266,7 +266,7 @@ async def extract_cscs_data_with_openai(file_content: bytes, file_extension: str
             ]
             
             response = await call_openai_parse(
-                client=openai_client,
+                client=client,
                 model="gpt-4.1",
                 input_data=input_data,
             )
@@ -318,40 +318,73 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "message": f"Unsupported file type: {file_extension}. Please upload images (JPG, PNG, etc.) or PDF files.",
                 "extracted_data": None
             }
-        
-        # Temporarily return test data instead of OpenAI extraction
-        extracted_data = {
-            "scheme": "CSCS",
-            "first_name": "Test",
-            "last_name": "User",
-            "registration_number": "12345678",
-            "expiry_date": "2025-12-31",
-            "hse_tested": True,
-            "role": "Test Role"
-        }
-        logger.info(f"Test extracted data: {extracted_data}")
-        
-        # Check if we have minimum required fields
-        has_required_fields = (
-            extracted_data.get("scheme") and 
-            extracted_data.get("registration_number") and 
-            extracted_data.get("last_name")
-        )
-        
-        return {
-            "success": True,
-            "message": "Data extracted successfully using OpenAI GPT-4.1",
-            "extracted_data": extracted_data,
-            "has_required_fields": has_required_fields
-        }
-        
-    except Exception as e:
-        logger.error(f"OpenAI extraction failed: {str(e)}")
-        return {
-            "success": False,
-            "message": f"Error processing file: {str(e)}",
-            "extracted_data": None
-        }
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
+            temp_file.write(file_content)
+            temp_image_path = temp_file.name
+
+        try:
+            input_content = [
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Imagine You are an expert in extracting data from CSCS card (UK Construction Skills Certification Scheme) that is needed to validate the candidate. "
+                        "You have to select 1 scheme that the card belongs to from the following list: [ACAD, ACE, ADIA, ADSA(DHF), ALLMI, AMI, Allianz UK, BFBi, British Engineering Services, CCDO,CISRS, CPCS, CSCS, CSR, CSWIP, DSA, ECS (JIB), ECS (SJIB), EUSR, Engineering Services Skillcard, FASET, FISS, GEA, HSB, ICATS, IEXPE, IPAF, JIB PMES, LEEA, LISS, Llyods British, MPQC, NPORS, PASMA, Q-card, SAFed, SEIRS, SICCS, SNIJIB, TICA, TTM, Train the painter]"
+                        "Extract expiry date in str format not in datetime.data(). "
+                    ),
+                }
+            ]
+            if file_extension in ["png", "jpg", "jpeg"]:
+                with open(temp_image_path, "rb") as image_file:
+                    base64_image = encode_image(image_file)
+                input_content.append({
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{base64_image}",
+                })
+            elif file_extension == "pdf":
+                try:
+                    images = convert_from_path(temp_image_path)
+                    if not images:
+                        raise HTTPException(status_code=400, detail="No images found in the PDF")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image_file:
+                        images[0].save(temp_image_file.name, "JPEG")
+                        with open(temp_image_file.name, "rb") as image_file:
+                            base64_image = encode_image(image_file)
+                        os.unlink(temp_image_file.name) 
+                    input_content.append({
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{base64_image}",
+                    })
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Failed to extract images from PDF: {str(e)}")
+
+            print("Extracting data from certificate/card...")
+            input_data=[
+                    {
+                        "role": "user",
+                        "content": input_content,
+                    }
+                ]
+            response = await call_openai_parse(
+                client=client,
+                model="gpt-4.1",
+                input_data=input_data,
+            )
+            cscs_response = response.output_parsed
+            print("CSCS Response:", cscs_response)
+            cscs_json = cscs_response.model_dump()
+            print("CSCS JSON:", cscs_json)
+
+            return {
+                "success": True,
+                "message": "OpenAI extraction completed",
+                "extracted_data": cscs_json
+            }
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_image_path):
+                os.unlink(temp_image_path)
 
 @app.post("/bulk-verify-cards/")
 async def bulk_verify_cards(files: list[UploadFile] = File(...)):
@@ -365,7 +398,7 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
             # Step 1: Use OpenAI GPT-4.1 for data extraction (same as cert-to-json)
             ocr_result = await ocr_extract(file)
             
-            if ocr_result["success"] and ocr_result.get("has_required_fields"):
+            if ocr_result["success"]:
                 extracted_data = ocr_result["extracted_data"]
                 
                 # Step 2: Call admin validation task with the extracted data
