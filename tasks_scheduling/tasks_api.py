@@ -219,14 +219,19 @@ def extract_text_from_image(image_bytes: bytes) -> str:
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     """Extract text from PDF"""
     try:
+        logger.info(f"Opening PDF with {len(pdf_bytes)} bytes")
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
-        text = ""
+        logger.info(f"PDF opened successfully, page count: {pdf_document.page_count}")
         
+        text = ""
         for page_num in range(pdf_document.page_count):
             page = pdf_document[page_num]
-            text += page.get_text()
+            page_text = page.get_text()
+            logger.info(f"Page {page_num + 1} text length: {len(page_text)}")
+            text += page_text
         
         pdf_document.close()
+        logger.info(f"Total extracted text length: {len(text)}")
         return text.strip()
     except Exception as e:
         logger.error(f"PDF extraction failed: {str(e)}")
