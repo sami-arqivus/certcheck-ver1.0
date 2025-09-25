@@ -5,7 +5,7 @@ from psycopg2.extras import RealDictCursor     # type: ignore[import-untyped]
 import pandas as pd             # type: ignore[import-untyped]  
 from io import BytesIO
 import json
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks                    # type: ignore[import-untyped]
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, File, UploadFile                    # type: ignore[import-untyped]
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm            # type: ignore[import-untyped]   
 from fastapi.middleware.cors import CORSMiddleware                                    # type: ignore[import-untyped] 
 import datetime
@@ -26,6 +26,8 @@ from pydantic import ValidationError
 from redis import Redis
 from urllib.parse import urlparse
 from celery.result import AsyncResult
+import httpx
+import base64
 
 
 app = FastAPI(title = "Task scheduler API", description = "This API is used to schedule tasks using Celery.")
@@ -164,7 +166,122 @@ async def get_admin_validation_result(task_id: str):
     except Exception as e:
         logger.error(f"Failed to get task result: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/bulk-verify-cards/")
+async def bulk_verify_cards(files: list[UploadFile] = File(...)):
+    """
+    Bulk verify multiple CSCS card files
+    """
+    results = []
     
+    for file in files:
+        try:
+            # Read file content
+            file_content = await file.read()
+            
+            # Convert to base64 for vision API
+            base64_content = base64.b64encode(file_content).decode('utf-8')
+            
+            # Call vision API
+            async with httpx.AsyncClient() as client:
+                vision_response = await client.post(
+                    "http://vision_models:8002/cert-to-json",
+                    files={"file": (file.filename, file_content, file.content_type)},
+                    timeout=60.0
+                )
+                
+                if vision_response.status_code == 200:
+                    vision_data = vision_response.json()
+                    
+                    if vision_data.get("success") and vision_data.get("extracted_data"):
+                        extracted_data = vision_data["extracted_data"]
+                        
+                        # Check if we have required fields
+                        if (extracted_data.get("scheme") and 
+                            extracted_data.get("registration_number") and 
+                            extracted_data.get("last_name")):
+                            
+                            # Call admin validation
+                            validation_response = await client.post(
+                                "http://localhost:8004/admin_validate_cscs_card/",
+                                json={
+                                    "scheme": extracted_data["scheme"],
+                                    "registration_number": extracted_data["registration_number"],
+                                    "last_name": extracted_data["last_name"],
+                                    "first_name": extracted_data.get("first_name"),
+                                    "expiry_date": extracted_data.get("expiry_date"),
+                                    "hse_tested": None,
+                                    "role": None
+                                }
+                            )
+                            
+                            if validation_response.status_code == 200:
+                                validation_data = validation_response.json()
+                                results.append({
+                                    "filename": file.filename,
+                                    "file_type": file.content_type,
+                                    "success": True,
+                                    "message": "Verification successful",
+                                    "extracted_data": extracted_data,
+                                    "validation_data": validation_data
+                                })
+                            else:
+                                results.append({
+                                    "filename": file.filename,
+                                    "file_type": file.content_type,
+                                    "success": False,
+                                    "message": f"Validation failed: {validation_response.text}",
+                                    "extracted_data": extracted_data,
+                                    "validation_data": None
+                                })
+                        else:
+                            results.append({
+                                "filename": file.filename,
+                                "file_type": file.content_type,
+                                "success": False,
+                                "message": "Could not extract required card details",
+                                "extracted_data": extracted_data,
+                                "validation_data": None
+                            })
+                    else:
+                        results.append({
+                            "filename": file.filename,
+                            "file_type": file.content_type,
+                            "success": False,
+                            "message": "Vision API failed to extract data",
+                            "extracted_data": None,
+                            "validation_data": None
+                        })
+                else:
+                    results.append({
+                        "filename": file.filename,
+                        "file_type": file.content_type,
+                        "success": False,
+                        "message": f"Vision API error: {vision_response.status_code}",
+                        "extracted_data": None,
+                        "validation_data": None
+                    })
+                    
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "file_type": file.content_type,
+                "success": False,
+                "message": f"Error processing file: {str(e)}",
+                "extracted_data": None,
+                "validation_data": None
+            })
+    
+    return {
+        "success": True,
+        "message": f"Processed {len(files)} files",
+        "results": results,
+        "summary": {
+            "total": len(files),
+            "successful": len([r for r in results if r["success"]]),
+            "failed": len([r for r in results if not r["success"]])
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn                          # type: ignore

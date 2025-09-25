@@ -42,6 +42,12 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
+    
+    // For FormData requests, remove Content-Type to let browser set it
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     return config;
   },
   (error) => {
@@ -54,7 +60,13 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized access
+      // Don't auto-redirect for vision API calls - let the component handle it
+      if (error.config?.url?.includes('/vision/')) {
+        console.warn('Vision API authentication failed:', error.response?.data);
+        return Promise.reject(error);
+      }
+      
+      // Handle unauthorized access for other endpoints
       if (typeof window !== 'undefined') {
         localStorage.removeItem('certcheck_token');
         localStorage.removeItem('certcheck_user');
