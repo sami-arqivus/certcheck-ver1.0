@@ -38,9 +38,9 @@ redis_client = Redis(
     username=username,
     password=password,
     db=db,
-    # ssl=True,
-    # ssl_cert_reqs='required',
-    # ssl_ca_certs=ssl_ca_certs,
+    ssl=True,
+    ssl_cert_reqs='required',
+    ssl_ca_certs=ssl_ca_certs,
     decode_responses=True 
 )
 
