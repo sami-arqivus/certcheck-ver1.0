@@ -137,19 +137,32 @@ async def admin_validate_cscs_card(request: ValidationRequest):
             task = AsyncResult(existing_task_id, app=celery_app)
             if task.state in ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']:
                 logger.info(f"Duplicate admin task detected for registration {request.registration_number}. Existing task ID: {existing_task_id}")
-                return {"status": "PENDING", "message": f"Task {existing_task_id} already in progress"}
+                return {"status": "PENDING", "message": f"Task {existing_task_id} already in progress", "task_id": existing_task_id}
             else:
                 redis_client.delete(task_key)
         task = admin_validate_cscs_card_task.delay(request.model_dump())
         redis_client.setex(task_key, 3600, task.id)
         logger.info(f"Queued admin task for registration {request.registration_number}. Task ID: {task.id}")
         
-        result = task.get(timeout=900)
-        return {"status": "SUCCESS", "result": result}
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="Task took too long to complete")
+        return {"status": "SUBMITTED", "message": "Validation task submitted successfully", "task_id": task.id}
     except Exception as e:
         logger.error(f"Admin task failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin_validate_cscs_card/{task_id}")
+async def get_admin_validation_result(task_id: str):
+    try:
+        task = AsyncResult(task_id, app=celery_app)
+        if task.state == 'PENDING':
+            return {"status": "PENDING", "message": "Task is still processing"}
+        elif task.state == 'SUCCESS':
+            return {"status": "SUCCESS", "result": task.result}
+        elif task.state == 'FAILURE':
+            return {"status": "FAILURE", "message": str(task.info)}
+        else:
+            return {"status": task.state, "message": f"Task is in {task.state} state"}
+    except Exception as e:
+        logger.error(f"Failed to get task result: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
 

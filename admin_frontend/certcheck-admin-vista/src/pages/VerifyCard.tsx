@@ -65,22 +65,27 @@ const VerifyCard = () => {
         },
       });
 
-      const { result } = response.data;
-      setTaskResult(result);
-      toast({
-        title: result.success ? "Verification Successful" : "Verification Failed",
-        description: result.success
-          ? "Card details verified successfully."
-          : result.message || "No active cards found.",
-        variant: result.success ? "default" : "destructive",
-      });
+      const { status, task_id, message } = response.data;
+      
+      if (status === 'SUBMITTED' && task_id) {
+        toast({
+          title: "Verification Started",
+          description: "Validation is in progress. Please wait...",
+          variant: "default",
+        });
+        
+        // Poll for results
+        await pollForResult(task_id, token);
+      } else if (status === 'PENDING') {
+        toast({
+          title: "Verification Already Running",
+          description: message,
+          variant: "default",
+        });
+      } else {
+        throw new Error(message || 'Unknown response');
+      }
 
-      // Reset form
-      setManualDetails({
-        scheme: '',
-        registrationNumber: '',
-        lastName: ''
-      });
     } catch (error: any) {
       console.error('Failed to submit manual verification:', error);
       toast({
@@ -91,6 +96,63 @@ const VerifyCard = () => {
     } finally {
       setManualLoading(false);
     }
+  };
+
+  const pollForResult = async (taskId: string, token: string) => {
+    const maxAttempts = 30; // 5 minutes with 10-second intervals
+    let attempts = 0;
+    
+    const poll = async (): Promise<void> => {
+      try {
+        const response = await apiClient.get(`/tasks_scheduling/admin_validate_cscs_card/${taskId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        const { status, result, message } = response.data;
+        
+        if (status === 'SUCCESS') {
+          setTaskResult(result);
+          toast({
+            title: result.success ? "Verification Successful" : "Verification Failed",
+            description: result.success
+              ? "Card details verified successfully."
+              : result.message || "No active cards found.",
+            variant: result.success ? "default" : "destructive",
+          });
+          
+          // Reset form
+          setManualDetails({
+            scheme: '',
+            registrationNumber: '',
+            lastName: ''
+          });
+          return;
+        } else if (status === 'FAILURE') {
+          throw new Error(message || 'Task failed');
+        } else if (status === 'PENDING' || status === 'RECEIVED' || status === 'STARTED') {
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 10000); // Poll every 10 seconds
+          } else {
+            throw new Error('Verification timed out. Please try again.');
+          }
+        } else {
+          throw new Error(`Unexpected status: ${status}`);
+        }
+      } catch (error: any) {
+        console.error('Polling error:', error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to get verification result.",
+          variant: "destructive",
+        });
+        setManualLoading(false);
+      }
+    };
+    
+    await poll();
   };
 
   return (
