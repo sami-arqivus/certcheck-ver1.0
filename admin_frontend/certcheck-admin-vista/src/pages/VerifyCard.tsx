@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { FileText, AlertCircle } from 'lucide-react';
+import { FileText, AlertCircle, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
@@ -31,11 +31,20 @@ const VerifyCard = () => {
   });
   const [manualLoading, setManualLoading] = useState(false);
   const [taskResult, setTaskResult] = useState<any>(null);
+  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'submitting' | 'processing' | 'completed' | 'failed'>('idle');
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
   // Redirect if not logged in
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  // Reset verification state when form is cleared
+  const resetVerificationState = () => {
+    setVerificationStatus('idle');
+    setTaskResult(null);
+    setCurrentTaskId(null);
+  };
 
   const handleManualSubmit = async () => {
     if (!manualDetails.scheme || !manualDetails.registrationNumber || !manualDetails.lastName) {
@@ -47,7 +56,15 @@ const VerifyCard = () => {
       return;
     }
 
+    // Prevent multiple submissions
+    if (verificationStatus === 'submitting' || verificationStatus === 'processing') {
+      return;
+    }
+
     setManualLoading(true);
+    setVerificationStatus('submitting');
+    setTaskResult(null);
+    
     try {
       const token = Cookies.get('certcheck_token');
       const response = await apiClient.post('/tasks_scheduling/admin_validate_cscs_card/', {
@@ -68,6 +85,8 @@ const VerifyCard = () => {
       const { status, task_id, message } = response.data;
       
       if (status === 'SUBMITTED' && task_id) {
+        setCurrentTaskId(task_id);
+        setVerificationStatus('processing');
         toast({
           title: "Verification Started",
           description: "Validation is in progress. Please wait...",
@@ -77,6 +96,8 @@ const VerifyCard = () => {
         // Poll for results
         await pollForResult(task_id, token);
       } else if (status === 'PENDING') {
+        setCurrentTaskId(task_id);
+        setVerificationStatus('processing');
         toast({
           title: "Verification Already Running",
           description: message,
@@ -88,6 +109,7 @@ const VerifyCard = () => {
 
     } catch (error: any) {
       console.error('Failed to submit manual verification:', error);
+      setVerificationStatus('failed');
       toast({
         title: "Error",
         description: error.response?.data?.detail || "Failed to submit manual verification.",
@@ -114,6 +136,7 @@ const VerifyCard = () => {
         
         if (status === 'SUCCESS') {
           setTaskResult(result);
+          setVerificationStatus('completed');
           toast({
             title: result.success ? "Verification Successful" : "Verification Failed",
             description: result.success
@@ -122,27 +145,37 @@ const VerifyCard = () => {
             variant: result.success ? "default" : "destructive",
           });
           
-          // Reset form
-          setManualDetails({
-            scheme: '',
-            registrationNumber: '',
-            lastName: ''
-          });
+          // Reset form after successful completion
+          if (result.success) {
+            setManualDetails({
+              scheme: '',
+              registrationNumber: '',
+              lastName: ''
+            });
+            // Reset verification state after a delay to show success
+            setTimeout(() => {
+              resetVerificationState();
+            }, 3000);
+          }
           return;
         } else if (status === 'FAILURE') {
+          setVerificationStatus('failed');
           throw new Error(message || 'Task failed');
         } else if (status === 'PENDING' || status === 'RECEIVED' || status === 'STARTED') {
           attempts++;
           if (attempts < maxAttempts) {
             setTimeout(poll, 10000); // Poll every 10 seconds
           } else {
+            setVerificationStatus('failed');
             throw new Error('Verification timed out. Please try again.');
           }
         } else {
+          setVerificationStatus('failed');
           throw new Error(`Unexpected status: ${status}`);
         }
       } catch (error: any) {
         console.error('Polling error:', error);
+        setVerificationStatus('failed');
         toast({
           title: "Error",
           description: error.message || "Failed to get verification result.",
@@ -180,6 +213,7 @@ const VerifyCard = () => {
                     value={manualDetails.scheme}
                     onChange={(e) => setManualDetails(prev => ({ ...prev, scheme: e.target.value }))}
                     placeholder="Enter scheme name"
+                    disabled={verificationStatus === 'submitting' || verificationStatus === 'processing'}
                   />
                 </div>
                 
@@ -190,6 +224,7 @@ const VerifyCard = () => {
                     value={manualDetails.registrationNumber}
                     onChange={(e) => setManualDetails(prev => ({ ...prev, registrationNumber: e.target.value }))}
                     placeholder="Enter registration number"
+                    disabled={verificationStatus === 'submitting' || verificationStatus === 'processing'}
                   />
                 </div>
               </div>
@@ -201,9 +236,40 @@ const VerifyCard = () => {
                   value={manualDetails.lastName}
                   onChange={(e) => setManualDetails(prev => ({ ...prev, lastName: e.target.value }))}
                   placeholder="Enter last name"
+                  disabled={verificationStatus === 'submitting' || verificationStatus === 'processing'}
                 />
               </div>
               
+              {/* Status indicator */}
+              {verificationStatus !== 'idle' && (
+                <div className="flex items-center space-x-2 p-3 rounded-lg bg-muted/50">
+                  {verificationStatus === 'submitting' && (
+                    <>
+                      <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                      <p className="text-sm text-blue-600">Submitting verification request...</p>
+                    </>
+                  )}
+                  {verificationStatus === 'processing' && (
+                    <>
+                      <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                      <p className="text-sm text-amber-600">Verification in progress. Please wait...</p>
+                    </>
+                  )}
+                  {verificationStatus === 'completed' && (
+                    <>
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <p className="text-sm text-green-600">Verification completed!</p>
+                    </>
+                  )}
+                  {verificationStatus === 'failed' && (
+                    <>
+                      <XCircle className="w-4 h-4 text-red-500" />
+                      <p className="text-sm text-red-600">Verification failed. Please try again.</p>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-start space-x-2 p-3 bg-muted/50 rounded-lg">
                 <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-muted-foreground">
@@ -213,10 +279,24 @@ const VerifyCard = () => {
               
               <Button 
                 onClick={handleManualSubmit} 
-                disabled={manualLoading}
-                className="w-full bg-gradient-primary hover:opacity-90 text-white"
+                disabled={verificationStatus === 'submitting' || verificationStatus === 'processing'}
+                className="w-full bg-gradient-primary hover:opacity-90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {manualLoading ? "Processing..." : "Submit for Verification"}
+                {verificationStatus === 'submitting' && (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                )}
+                {verificationStatus === 'processing' && (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                )}
+                {verificationStatus === 'idle' && "Submit for Verification"}
+                {verificationStatus === 'completed' && "Submit for Verification"}
+                {verificationStatus === 'failed' && "Try Again"}
               </Button>
 
               {/* Display task result */}
