@@ -318,26 +318,6 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "message": f"Unsupported file type: {file_extension}. Please upload images (JPG, PNG, etc.) or PDF files.",
                 "extracted_data": None
             }
-        
-        # Check if OpenAI client is available
-        if client is None:
-            # Return test data when OpenAI client is disabled
-            logger.info("OpenAI client disabled, returning test data")
-            extracted_data = {
-                "scheme": "CSCS",
-                "first_name": "Test",
-                "last_name": "User",
-                "registration_number": "12345678",
-                "expiry_date": "2025-12-31",
-                "hse_tested": True,
-                "role": "Test Role"
-            }
-            return {
-                "success": True,
-                "message": "Test data extracted (OpenAI disabled)",
-                "extracted_data": extracted_data
-            }
-        
         # Create temporary file for processing
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
             temp_file.write(file_content)
@@ -442,7 +422,7 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
                 
                 # Call the admin validation task
                 validation_task = admin_validate_cscs_card_task.delay(validation_request)
-                validation_result = validation_task.get(timeout=900)  # 15 minutes timeout
+                validation_result = validation_task.get(timeout=1200)  # 15 minutes timeout
                 
                 results.append({
                     "filename": file.filename,
