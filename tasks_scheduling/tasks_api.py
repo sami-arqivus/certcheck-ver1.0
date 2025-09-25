@@ -21,23 +21,21 @@ logger = logging.getLogger(__name__)
 # import sys
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from tasks import validate_cscs_card, admin_validate_cscs_card_task
-from celery.exceptions import CeleryError
-from pydantic import ValidationError
-from redis import Redis
+from celery.exceptions import CeleryError                   # type: ignore[import-untyped]
+from pydantic import ValidationError                    # type: ignore[import-untyped]
+from redis import Redis                   # type: ignore[import-untyped]
 from urllib.parse import urlparse
-from celery.result import AsyncResult
-import httpx
+from celery.result import AsyncResult                   # type: ignore[import-untyped]
+import httpx                   # type: ignore[import-untyped]       
 import base64
-from PIL import Image
-import pytesseract
-import fitz  # PyMuPDF for PDF processing
-import io
-import re
-from openai import OpenAI
-from pdf2image import convert_from_path
+from PIL import Image                   # type: ignore[import-untyped]
+
+from openai import OpenAI                   # type: ignore[import-untyped]
+from pdf2image import convert_from_path                   # type: ignore[import-untyped]
 import tempfile
 from pathlib import Path
-
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type                   # type: ignore[import-untyped]
+from openai import APIError                   # type: ignore[import-untyped]
 
 app = FastAPI(title = "Task scheduler API", description = "This API is used to schedule tasks using Celery.")
 
@@ -77,24 +75,8 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise HTTPException(status_code=500, detail="OPENAI_API_KEY not found in .env file")
 
-# Create OpenAI client with custom httpx client to avoid proxy conflicts
-import httpx
-try:
-    # Create a custom httpx client without proxy settings
-    http_client = httpx.Client(proxies=None, timeout=30.0)
-    client = OpenAI(api_key=OPENAI_API_KEY, http_client=http_client)
-except Exception as e:
-    logger.error(f"Failed to create OpenAI client with custom httpx: {e}")
-    # Fallback: try without custom http_client
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-    except Exception as e2:
-        logger.error(f"Failed to create OpenAI client: {e2}")
-        client = None
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Retry configuration for OpenAI API calls
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type                   # type: ignore[import-untyped]
-from openai import APIError                                                                                 # type: ignore[import-untyped]
 
 @retry(
     stop=stop_after_attempt(10),  # Retry up to 10 times
