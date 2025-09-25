@@ -139,13 +139,7 @@ const BulkVerify = () => {
         formData.append('file', file);
         
         // Call vision API for CSCS card extraction
-        const token = Cookies.get('certcheck_token');
-        const ocrResponse = await apiClient.post('/vision/cert-to-json', formData, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+        const ocrResponse = await apiClient.post('/vision/cert-to-json', formData);
 
         if (ocrResponse.data.success && ocrResponse.data.extracted_data) {
           const extractedData = ocrResponse.data.extracted_data;
@@ -186,7 +180,19 @@ const BulkVerify = () => {
           result.message = 'OCR failed to extract data from image';
         }
       } catch (error: any) {
-        result.message = `Attempt ${attempt} failed: ${error.response?.data?.detail || error.message}`;
+        console.error(`Attempt ${attempt} failed for ${file.name}:`, error);
+        
+        if (error.response?.status === 401) {
+          result.message = `Authentication failed. Please log in again.`;
+          // Don't continue retrying on auth errors
+          break;
+        } else if (error.response?.status === 413) {
+          result.message = `File too large: ${file.name}`;
+        } else if (error.response?.status >= 500) {
+          result.message = `Server error: ${error.response?.data?.detail || 'Internal server error'}`;
+        } else {
+          result.message = `Attempt ${attempt} failed: ${error.response?.data?.detail || error.message}`;
+        }
       }
       
       // Wait before retry (except on last attempt)
@@ -236,6 +242,17 @@ const BulkVerify = () => {
       return;
     }
 
+    // Check authentication before starting
+    const token = Cookies.get('certcheck_token');
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in again to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setState(prev => ({
       ...prev,
       isProcessing: true,
@@ -247,12 +264,17 @@ const BulkVerify = () => {
 
     const results: VerificationResult[] = [];
 
+    console.log(`Starting bulk verification for ${state.files.length} files`);
+
     for (let i = 0; i < state.files.length; i++) {
+      console.log(`Processing file ${i + 1}/${state.files.length}: ${state.files[i].name}`);
       setState(prev => ({ ...prev, currentFile: i + 1 }));
       
       const file = state.files[i];
       const result = await processFile(file);
       results.push(result);
+      
+      console.log(`File ${i + 1} result:`, result);
       
       setState(prev => ({
         ...prev,
