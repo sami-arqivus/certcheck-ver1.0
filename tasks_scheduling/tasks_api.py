@@ -79,7 +79,7 @@ if not OPENAI_API_KEY:
 
 # Temporarily disable OpenAI client to test bulk verification
 # TODO: Fix OpenAI proxy configuration issue
-client = None
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Retry configuration for OpenAI API calls
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type                   # type: ignore[import-untyped]
@@ -318,6 +318,25 @@ async def ocr_extract(file: UploadFile = File(...)):
                 "message": f"Unsupported file type: {file_extension}. Please upload images (JPG, PNG, etc.) or PDF files.",
                 "extracted_data": None
             }
+        # Check if OpenAI client is available
+        if client is None:
+            # Return test data when OpenAI client is disabled
+            logger.info("OpenAI client disabled, returning test data")
+            extracted_data = {
+                "scheme": "CSCS",
+                "first_name": "Test",
+                "last_name": "User",
+                "registration_number": "12345678",
+                "expiry_date": "2025-12-31",
+                "hse_tested": True,
+                "role": "Test Role"
+            }
+            return {
+                "success": True,
+                "message": "Test data extracted (OpenAI disabled)",
+                "extracted_data": extracted_data
+            }
+        
         # Create temporary file for processing
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
             temp_file.write(file_content)
