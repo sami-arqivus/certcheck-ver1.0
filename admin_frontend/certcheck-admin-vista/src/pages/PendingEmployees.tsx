@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import axios from "axios";
+import apiClient from "@/lib/api";
 import Cookies from "js-cookie";
 import { DownloadButton } from "@/components/DownloadButton";
 
@@ -30,7 +30,7 @@ export default function PendingEmployees() {
   const fetchPendingEmployees = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/aws/fetch-invitations-details?status=Pending', {
+      const response = await apiClient.get('/aws/fetch-invitations-details?status=Pending', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DownloadButton } from '@/components/DownloadButton';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 
 interface CSCSCard {
@@ -30,7 +30,7 @@ const ActiveCards = () => {
   const fetchActiveCards = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/aws/fetch_active_cscs_card_details/', {
+      const response = await apiClient.get('/aws/fetch_active_cscs_card_details/', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -31,7 +31,7 @@ const CSCSCardDetails = () => {
 
   const fetchCSCSCards = async () => {
     try {
-      const response = await axios.get('/aws/fetch_all_cscs_card_details/', {
+      const response = await apiClient.get('/aws/fetch_all_cscs_card_details/', {
         headers: {
           Authorization: `Bearer ${token}`,
         },

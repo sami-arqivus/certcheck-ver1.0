@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { FileText, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 
 interface ValidationRequest {
@@ -50,7 +50,7 @@ const VerifyCard = () => {
     setManualLoading(true);
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.post('/tasks_scheduling/admin_validate_cscs_card/', {
+      const response = await apiClient.post('/tasks_scheduling/admin_validate_cscs_card/', {
         scheme: manualDetails.scheme,
         registration_number: manualDetails.registrationNumber,
         last_name: manualDetails.lastName,

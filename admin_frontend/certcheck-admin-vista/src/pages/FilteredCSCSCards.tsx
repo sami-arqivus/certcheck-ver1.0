@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DownloadButton } from '@/components/DownloadButton';
 import { useToast } from '@/hooks/use-toast';
 import { Filter, Search } from 'lucide-react';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 
 interface CSCSCard {
   user_email: string;
@@ -52,7 +52,7 @@ const FilteredCSCSCards = () => {
       if (filters.scheme_name) params.append('scheme_name', filters.scheme_name);
       if (filters.card_type) params.append('card_type', filters.card_type);
 
-      const response = await axios.get(
+      const response = await apiClient.get(
         `/aws/filter_active_cards/?${params.toString()}`,
         {
           headers: {

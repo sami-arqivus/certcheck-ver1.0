@@ -11,7 +11,7 @@ import { HeaderNav } from '@/components/HeaderNav';
 import { AddEmployeeDialog } from '@/components/AddEmployeeDialog';
 import { DownloadButton } from '@/components/DownloadButton';
 import { useToast } from '@/hooks/use-toast';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 
 interface Employee {
@@ -39,7 +39,7 @@ const Dashboard = () => {
   const fetchEmployees = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/aws/fetch-invitations-details', {
+      const response = await apiClient.get('/aws/fetch-invitations-details', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ const Dashboard = () => {
   }) => {
     try {
       const token = Cookies.get('certcheck_token');
-      await axios.post('/aws/store-invitation-details', employeeData, {
+      await apiClient.post('/aws/store-invitation-details', employeeData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

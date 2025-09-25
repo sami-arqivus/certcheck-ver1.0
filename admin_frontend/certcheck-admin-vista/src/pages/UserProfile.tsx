@@ -7,7 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, User, Mail, MapPin, Calendar, Briefcase } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 
 interface UserDetails {
@@ -44,7 +44,7 @@ const UserProfile = () => {
     try {
       const token = Cookies.get('certcheck_token');
       console.log('Fetching user profile for refId:', refId, 'with token:', token);
-      const response = await axios.get<UserDetails>(`/aws/fetch_user_profile/${refId}`, {
+      const response = await apiClient.get<UserDetails>(`/aws/fetch_user_profile/${refId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

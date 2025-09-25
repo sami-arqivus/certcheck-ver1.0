@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 import { DownloadButton } from '@/components/DownloadButton';
 
@@ -32,7 +32,7 @@ const RejectedEmployees = () => {
   const fetchRejectedEmployees = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/aws/fetch-invitations-details?status=Rejected', {
+      const response = await apiClient.get('/aws/fetch-invitations-details?status=Rejected', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

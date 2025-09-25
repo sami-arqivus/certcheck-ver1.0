@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import Cookies from 'js-cookie';
-import axios from 'axios';    
+import apiClient from '@/lib/api';    
 import { toast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -64,15 +64,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true);
       
-      const response = await axios.post('https://54.159.160.253/admin-login', {
+      const response = await apiClient.post('/admin-login', {
         username : email,
         password,
       });
-
-      // const response = await axios.post('/admin-login', {
-      //   username : email,
-      //   password,
-      // });
       
       const token = response.data.token;
       const user = {

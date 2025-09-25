@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Mail, Shield, Users, UserCheck } from 'lucide-react';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 
 interface AdminProfile {
@@ -37,7 +37,7 @@ export const ProfileCard = () => {
   const fetchProfile = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/admin/me', {
+      const response = await apiClient.get('/admin/me', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -56,7 +56,7 @@ export const ProfileCard = () => {
       const token = Cookies.get('certcheck_token');
       
       // Fetch counts from pending_data table for inprocess count
-      const pendingResponse = await axios.get(`/aws/fetch_pending_users/`, {
+      const pendingResponse = await apiClient.get(`/aws/fetch_pending_users/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -64,7 +64,7 @@ export const ProfileCard = () => {
       });
 
       // Fetch counts from accepted_data table for active count
-      const acceptedResponse = await axios.get(`/aws/fetch_active_users/`, {
+      const acceptedResponse = await apiClient.get(`/aws/fetch_active_users/`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

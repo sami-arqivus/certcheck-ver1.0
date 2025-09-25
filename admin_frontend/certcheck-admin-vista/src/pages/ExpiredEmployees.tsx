@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CreditCard, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 import { DownloadButton } from '@/components/DownloadButton';
 
@@ -32,7 +32,7 @@ const ExpiredCards = () => {
   const fetchExpiredCards = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/aws/fetch_expired_card_details/', {
+      const response = await apiClient.get('/aws/fetch_expired_card_details/', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -54,7 +54,7 @@ const ExpiredCards = () => {
   const handleNotify = async (card: CSCSCard) => {
     try {
       const token = Cookies.get('certcheck_token');
-      await axios.post('/aws/send-notification-email/', card, {
+      await apiClient.post('/aws/send-notification-email/', card, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

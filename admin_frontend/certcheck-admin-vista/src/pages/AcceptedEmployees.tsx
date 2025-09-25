@@ -8,7 +8,7 @@ import { Eye, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { DownloadButton } from '@/components/DownloadButton';
-import axios from 'axios';
+import apiClient from '@/lib/api';
 import Cookies from 'js-cookie';
 
 interface Employee {
@@ -35,7 +35,7 @@ const AcceptedEmployees = () => {
   const fetchAcceptedEmployees = async () => {
     try {
       const token = Cookies.get('certcheck_token');
-      const response = await axios.get('/aws/fetch-invitations-details?status=Accepted', {
+      const response = await apiClient.get('/aws/fetch-invitations-details?status=Accepted', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
