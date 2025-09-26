@@ -85,7 +85,55 @@ client = OpenAI(api_key=OPENAI_API_KEY)
     before_sleep=lambda retry_state: logger.info(f"Retrying OpenAI API call: attempt {retry_state.attempt_number}, error: {retry_state.outcome.exception()}")
 )
 async def call_openai_parse(client, model, input_data):
-    return client.responses.parse(model=model, input=input_data, text_format=CSCSCardJson)
+    # Define the JSON schema for structured output
+    json_schema = {
+        "type": "object",
+        "properties": {
+            "scheme": {"type": "string"},
+            "first_name": {"type": "string"},
+            "last_name": {"type": "string"},
+            "registration_number": {"type": "string"},
+            "expiry_date": {"type": "string"},
+            "hse_tested": {"type": "boolean"},
+            "role": {"type": "string"}
+        },
+        "required": ["scheme", "first_name", "last_name", "registration_number", "expiry_date", "hse_tested", "role"]
+    }
+    
+    # Add instruction to return JSON in the message
+    input_data[0]["content"].append({
+        "type": "text",
+        "text": "Please return the extracted data as a JSON object with the following structure: {\"scheme\": \"string\", \"first_name\": \"string\", \"last_name\": \"string\", \"registration_number\": \"string\", \"expiry_date\": \"string\", \"hse_tested\": boolean, \"role\": \"string\"}"
+    })
+    
+    response = client.chat.completions.create(
+        model=model,
+        messages=input_data,
+        response_format={"type": "json_object"},
+        temperature=0.1
+    )
+    
+    # Parse the JSON response
+    import json
+    response_content = response.choices[0].message.content
+    print(f"Raw OpenAI response: {response_content}")
+    
+    try:
+        response_data = json.loads(response_content)
+        print(f"Parsed response data: {response_data}")
+        
+        # Create and return the Pydantic model
+        return type('OpenAIResponse', (), {
+            'output_parsed': CSCSCardJson(**response_data)
+        })()
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {e}")
+        print(f"Response content: {response_content}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse OpenAI response: {str(e)}")
+    except Exception as e:
+        print(f"Pydantic validation error: {e}")
+        print(f"Response data: {response_data}")
+        raise HTTPException(status_code=400, detail=f"Validation error: {str(e)}")
 
 def encode_image(image_file):
     """Encode image file to base64 string."""
@@ -244,7 +292,7 @@ async def ocr_extract(file: UploadFile = File(...)):
         try:
             input_content = [
                 {
-                    "type": "input_text",
+                    "type": "text",
                     "text": (
                         "Imagine You are an expert in extracting data from CSCS card (UK Construction Skills Certification Scheme) that is needed to validate the candidate. "
                         "You have to select 1 scheme that the card belongs to from the following list: [ACAD, ACE, ADIA, ADSA(DHF), ALLMI, AMI, Allianz UK, BFBi, British Engineering Services, CCDO,CISRS, CPCS, CSCS, CSR, CSWIP, DSA, ECS (JIB), ECS (SJIB), EUSR, Engineering Services Skillcard, FASET, FISS, GEA, HSB, ICATS, IEXPE, IPAF, JIB PMES, LEEA, LISS, Llyods British, MPQC, NPORS, PASMA, Q-card, SAFed, SEIRS, SICCS, SNIJIB, TICA, TTM, Train the painter]"
@@ -256,8 +304,8 @@ async def ocr_extract(file: UploadFile = File(...)):
                 with open(temp_image_path, "rb") as image_file:
                     base64_image = encode_image(image_file)
                 input_content.append({
-                    "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{base64_image}",
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
                 })
             elif file_extension == "pdf":
                 try:
@@ -270,8 +318,8 @@ async def ocr_extract(file: UploadFile = File(...)):
                             base64_image = encode_image(image_file)
                         os.unlink(temp_image_file.name) 
                     input_content.append({
-                        "type": "input_image",
-                        "image_url": f"data:image/jpeg;base64,{base64_image}",
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
                     })
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=f"Failed to extract images from PDF: {str(e)}")
@@ -285,7 +333,7 @@ async def ocr_extract(file: UploadFile = File(...)):
                 ]
             response = await call_openai_parse(
                 client=client,
-                model="gpt-4.1",
+                model="gpt-4o",
                 input_data=input_data,
             )
             cscs_response = response.output_parsed
@@ -340,7 +388,7 @@ async def bulk_verify_cards(files: list[UploadFile] = File(...)):
                 
                 # Call the admin validation task
                 validation_task = admin_validate_cscs_card_task.delay(validation_request)
-                validation_result = validation_task.get(timeout=1200)  # 15 minutes timeout
+                validation_result = validation_task.get(timeout=1200)  # 20 minutes timeout
                 
                 results.append({
                     "filename": file.filename,
