@@ -1,0 +1,188 @@
+# Production Nginx Configuration Template
+# This configuration is optimized for production deployment
+
+upstream frontend {
+    server frontend:8080;
+}
+
+upstream backend {
+    server backend_container:8003;
+}
+
+upstream login_register {
+    server login_register_container:8000;
+}
+
+upstream aws_api {
+    server aws_container:8001;
+}
+
+upstream vision_models {
+    server vision_models_container:8002;
+}
+
+upstream tasks_scheduling {
+    server tasks_scheduling_container:8004;
+}
+
+upstream admin_frontend {
+    server admin_frontend_container:8081;
+}
+
+server {
+    listen 80;
+    server_name 54.159.160.253 localhost;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name 54.159.160.253 localhost;
+    
+    # SSL Configuration (you'll need to add your SSL certificates)
+    # ssl_certificate /etc/ssl/certs/certcheck.crt;
+    # ssl_certificate_key /etc/ssl/private/certcheck.key;
+    
+    # For now, using self-signed certificates for testing
+    ssl_certificate /etc/ssl/certs/server.crt;
+    ssl_certificate_key /etc/ssl/private/server.key;
+    
+    # SSL Security Settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    
+    # Security Headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    
+    # Gzip Compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+
+    # Main frontend application
+    location / {
+        proxy_pass http://frontend;
+        include /etc/nginx/proxy_params;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Cache static assets
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            proxy_pass http://frontend;
+        }
+    }
+
+    # Admin frontend
+    location /admin/ {
+        proxy_pass http://admin_frontend/;
+        include /etc/nginx/proxy_params;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # API Endpoints
+    location /user-login {
+        proxy_pass http://login_register/user-login;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /user-register {
+        proxy_pass http://login_register/user-register;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /user/ {
+        proxy_pass http://login_register/user/;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /admin-login {
+        proxy_pass http://login_register/admin-login;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /admin/me {
+        proxy_pass http://login_register/admin/me;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /public/ {
+        proxy_pass http://login_register/public/;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /api/image/ {
+        proxy_pass http://login_register/api/image/;
+        include /etc/nginx/proxy_params;
+        proxy_buffer_size 16k;
+        proxy_buffers 32 16k;
+        proxy_busy_buffers_size 64k;
+    }
+
+    location /backend/ {
+        proxy_pass http://backend/;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /aws/ {
+        proxy_pass http://aws_api/;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /vision/ {
+        proxy_pass http://vision_models/;
+        include /etc/nginx/proxy_params;
+    }
+
+    location /tasks_scheduling/ {
+        proxy_pass http://tasks_scheduling/;
+        include /etc/nginx/proxy_params;
+    }
+
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # Block access to sensitive files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~ ~$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+}

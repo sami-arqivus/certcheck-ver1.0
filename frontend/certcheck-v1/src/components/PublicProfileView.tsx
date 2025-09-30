@@ -42,11 +42,11 @@ const PublicProfileView: React.FC = () => {
       setError(null);
 
       // Fetch user profile
-      const profileResponse = await axios.get(`https://54.159.160.253/api/public/profile/${userid}`);
+      const profileResponse = await axios.get(`${import.meta.env.VITE_API_URL || 'https://localhost'}/api/public/profile/${userid}`);
       setUserProfile(profileResponse.data);
       console.log(profileResponse.data)
       // Fetch verified cards
-      const cardsResponse = await axios.get(`https://54.159.160.253/api/public/verified-cards/${userid}`);
+      const cardsResponse = await axios.get(`${import.meta.env.VITE_API_URL || 'https://localhost'}/api/public/verified-cards/${userid}`);
       console.log(cardsResponse)
       const cardList = Array.isArray(cardsResponse.data.cards_data) ? cardsResponse.data.cards_data : [];
       setCards(cardList);

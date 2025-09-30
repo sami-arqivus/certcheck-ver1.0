@@ -121,7 +121,7 @@ class ApiClient {
       case 'web':
       default:
         // Web: Use relative path to inherit protocol/host
-        this.baseURL = '/';
+        this.baseURL = 'https://localhost';
         break;
     }
   }

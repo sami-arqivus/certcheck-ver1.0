@@ -69,7 +69,7 @@ const AuthForm = () => {
       // });
 
       
-      const response = await axios.post('https://54.159.160.253/forgot-password/', {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'https://localhost'}/forgot-password/`, {
         email,
         recaptcha_token: recaptchaToken
       }, {
@@ -106,14 +106,26 @@ const AuthForm = () => {
       return handleForgotPassword(e);
     }
     
-    if (!recaptchaToken) {
+    // Password validation
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
       toast({
-        title: "reCAPTCHA Required",
-        description: "Please complete the reCAPTCHA verification",
+        title: "Invalid Password",
+        description: "Password must be at least 8 characters long and contain at least one uppercase letter, one number, and one special character",
         variant: "destructive",
       });
       return;
     }
+
+    // Make reCAPTCHA optional for testing
+    // if (!recaptchaToken) {
+    //   toast({
+    //     title: "reCAPTCHA Required",
+    //     description: "Please complete the reCAPTCHA verification",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
 
     setIsLoading(true);
 
@@ -136,14 +148,17 @@ const AuthForm = () => {
           //   },
           // });
 
-      const response = await axios.post(`https://54.159.160.253${endpoint}`, payload, {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL || 'https://localhost'}${endpoint}`, payload, {
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      if (response.status === 200 && response.data.token) {
-        login(response.data.token, !isLogin);
+      if (response.status === 200 && (response.data.token || response.data.access_token)) {
+        const token = response.data.token || response.data.access_token;
+        console.log("Login successful, token:", token);
+        console.log("Response data:", response.data);
+        login(token, !isLogin);
         if (isLogin) {
           toast({
             title: "Success!",
@@ -152,11 +167,16 @@ const AuthForm = () => {
         }
         
         // Check verification status for users
+        console.log("Checking verification status:", response.data.verification_status);
+        console.log("isLogin:", isLogin);
+        console.log("verification_status truthy:", !!response.data.verification_status);
+        
         if (isLogin && response.data.verification_status) {
           console.log("User is verified:", response.data.verification_status);
           console.log("Navigating to home page");
           navigate('/home');
         } else {
+          console.log("User not verified, navigating to upload page");
           navigate('/upload');
         }
       }
@@ -381,7 +401,7 @@ const AuthForm = () => {
             <Button 
               type="submit" 
               className="w-full bg-gradient-primary hover:shadow-glow text-primary-foreground font-semibold py-2 sm:py-3 px-4 sm:px-6 rounded-lg transition-all duration-300 transform hover:scale-105 text-sm sm:text-base"
-              disabled={isLoading || !recaptchaToken}
+              disabled={isLoading}
             >
               {isLoading ? (
                 <>

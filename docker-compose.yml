@@ -1,4 +1,4 @@
-# version: "3.9"
+version: "3.9"
 volumes:
   postgres_data:
     driver: local
@@ -35,9 +35,12 @@ services:
       - test-network
     volumes:
       - ./login_register:/app     # for live reload on code change
+      - ./auth:/app/auth          # mount auth directory for enhanced auth modules
+      - ./logs:/app/logs          # mount logs directory for audit logs
     env_file:
       - ./.env.shared
       - ./login_register/.env
+      - ./login_register/env.docker
     depends_on:
       - postgres
 
@@ -330,9 +333,9 @@ services:
     env_file:
       - ./.env.shared
       - ./tasks_scheduling/.env
-    environment:
-      - BROKER_URL=${BROKER_URL}
-      - RESULT_BACKEND=${RESULT_BACKEND}
+    # environment:
+    #   - BROKER_URL=${BROKER_URL}
+    #   - RESULT_BACKEND=${RESULT_BACKEND}
     depends_on:
       - tasks_scheduling
       - worker

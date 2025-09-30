@@ -86,6 +86,7 @@ server {
     location /api/reset-password/ { proxy_pass http://login_register_user:8000/reset-password/; include /etc/nginx/proxy_params; proxy_buffer_size 16k; proxy_buffers 32 16k; proxy_busy_buffers_size 64k;}
     location /api/public/profile/ { proxy_pass http://login_register_user:8000/public/profile/; include /etc/nginx/proxy_params; proxy_buffer_size 16k; proxy_buffers 32 16k; proxy_busy_buffers_size 64k;}
     location /api/public/verified-cards/ { proxy_pass http://login_register_user:8000/public/verified-cards/; include /etc/nginx/proxy_params; proxy_buffer_size 16k; proxy_buffers 32 16k; proxy_busy_buffers_size 64k;}
+    location /api/image/ { proxy_pass http://login_register_user:8000/api/image/; include /etc/nginx/proxy_params; proxy_buffer_size 16k; proxy_buffers 32 16k; proxy_busy_buffers_size 64k;}
     location /user/me { proxy_pass http://login_register_user:8000/user/me; include /etc/nginx/proxy_params; }
 
     location /admin-login { proxy_pass http://login_register_user:8000/admin-login; include /etc/nginx/proxy_params; }

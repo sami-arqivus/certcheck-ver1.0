@@ -105,8 +105,13 @@ def create_s3_user_folder(user_id: int, bucket_name: str ):
         raise HTTPException(status_code=500, detail=f"Error creating S3 folder: {str(e)}")
     
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user-login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user/me")
 async def get_current_user(token: str = Depends(oauth2_scheme)):
+    print(f"🔍 get_current_user called with token: {token}")
+    print(f"🔍 Token length: {len(token) if token else 'None'}")
+    print(f"🔍 SECRET_KEY: {SECRET_KEY}")
+    print(f"🔍 ALGORITHM: {ALGORITHM}")
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -114,10 +119,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print(f"🔍 Decoded payload: {payload}")
         username: str = payload.get("sub")
+        print(f"🔍 Username from payload: {username}")
         if username is None:
+            print("❌ Username is None, raising credentials_exception")
             raise credentials_exception
-    except JWTError:
+        print(f"✅ Token validation successful for user: {username}")
+    except JWTError as e:
+        print(f"❌ JWT Error: {e}")
         raise credentials_exception
     return {"username": username}
 
@@ -145,6 +155,7 @@ origins = [
     "https://54.159.160.253",
 ]
 
+# CORS is handled by nginx, so we disable it here to avoid duplicate headers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -235,6 +246,8 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+
+
 @app.get("/user/me", response_model=UserResponse)
 async def get_user_details(current_user: dict = Depends(get_current_user), conn: connection = Depends(get_db)):
     try:
@@ -320,6 +333,19 @@ async def register_user(user: UserCreate, conn=Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error registering user: {e}")
     finally:
         cursor.close()
+
+@app.get("/user-login", include_in_schema=False)
+async def oauth2_schema():
+    """OAuth2 schema endpoint for OAuth2PasswordBearer"""
+    return {
+        "type": "oauth2",
+        "flows": {
+            "password": {
+                "tokenUrl": "/user-login",
+                "scopes": {}
+            }
+        }
+    }
 
 @app.post("/user-login", response_model=TokenResponse)
 async def login_user(user: LoginRequest, conn=Depends(get_db)):

@@ -38,7 +38,7 @@ ALGORITHM = os.getenv("ALGORITHM")
 AWS_REGION = os.getenv("AWS_REGION")
 CHARSET = "UTF-8"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user-login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="user/me", auto_error=False)
 
 if not AWS_ACCESS_KEY or not AWS_SECRET_ACCESS_KEY:
     raise HTTPException(status_code=500, detail="AWS credentials not found in .env file")

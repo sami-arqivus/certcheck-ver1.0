@@ -127,21 +127,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         logger.error("No token provided in Authorization header")
         raise credentials_exception
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            logger.error("JWT payload missing 'sub' claim")
-            raise credentials_exception
+        # Pass the token directly to the auth service for validation
         async with httpx.AsyncClient() as client:
             headers = {"Authorization": f"Bearer {token}"}
             logger.info("Calling auth service /user/me")
             response = await client.get(f"{AUTH_SERVICE_BASE}/user/me", headers=headers)
             logger.info(f"/user/me response status: {response.status_code}")
             if response.status_code != 200:
+                logger.error(f"Auth service returned status {response.status_code}")
                 raise credentials_exception
             user_data = response.json()
-            return {"username": username, "user_id": user_data["user_id"]}
-    except (JWTError, httpx.HTTPStatusError) as e:
+            return {"username": user_data["username"], "user_id": user_data["user_id"]}
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error in get_current_user: {str(e)}")
+        raise credentials_exception
+    except Exception as e:
         logger.error(f"Error in get_current_user: {str(e)}")
         raise credentials_exception
 

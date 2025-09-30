@@ -37,12 +37,26 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const fetchUser = async (token: string): Promise<User> => {
-  const response = await apiClient.get('/user/me', {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return response.data;
+  console.log('🔍 fetchUser called with token:', token);
+  console.log('🔍 Token length:', token.length);
+  console.log('🔍 apiClient baseURL:', apiClient.getBaseURL());
+  console.log('🔍 Full URL will be:', `${apiClient.getBaseURL()}/user/me`);
+  
+  try {
+    const response = await apiClient.get('/user/me', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log('✅ fetchUser success:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ fetchUser error:', error);
+    console.error('❌ Error response:', error.response?.data);
+    console.error('❌ Error status:', error.response?.status);
+    console.error('❌ Error headers:', error.response?.headers);
+    throw error;
+  }
 };
 
 const checkExpiryDates = async (token: string): Promise<ExpiryCheckResponse> => {

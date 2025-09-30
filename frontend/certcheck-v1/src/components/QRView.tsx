@@ -17,7 +17,7 @@ export function QRView() {
     console.log(user)
     console.log(user.id)
     if (user?.id) {
-      const url = `https://54.159.160.253/public-profile/${user.id}`;
+      const url = `${import.meta.env.VITE_API_URL || 'https://localhost'}/public-profile/${user.id}`;
       setPublicUrl(url);
       generateQRCode(url);
     }

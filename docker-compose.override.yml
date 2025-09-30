@@ -1,0 +1,41 @@
+# Local Development Override
+# This file is automatically loaded by docker-compose for local development
+services:
+  backend:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  login_register_user:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  tasks_scheduling:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  vision_models:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  aws:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@host.docker.internal:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nginx:
+    volumes:
+      - ./nginx/nginx-local.conf.template:/etc/nginx/conf.d/nginx.conf.template

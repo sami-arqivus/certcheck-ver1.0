@@ -1,8 +1,62 @@
 # Environment files
 *.env
 .env*
+!.env.example
+!.env.local.example
+!.env.production.example
+
+# Production files (sensitive)
+.env.production
+.env.local
+.env.shared
+**/env.production
+**/env.local
+**/env.docker
+
+# SSL Certificates
+nginx/ssl/
+*.crt
+*.key
+*.pem
+
+# Logs
+logs/
+*.log
+
 # OS files
 .DS_Store
+Thumbs.db
+
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Node modules
+node_modules/
+npm-debug.log*
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Database
+*.db
+*.sqlite
+
+# Backup files
+*.backup
+*.bak

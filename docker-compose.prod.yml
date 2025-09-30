@@ -1,0 +1,57 @@
+# Production Docker Compose Override
+# This file contains production-specific configurations
+
+version: '3.8'
+
+services:
+  # Frontend - Production Configuration
+  frontend:
+    build:
+      context: ./frontend/certcheck-v1
+    container_name: certcheck_frontend_prod
+    ports:
+      - "8080:8080"
+    networks:
+      - test-network
+    env_file:
+      - ./frontend/certcheck-v1/.env.production
+    command: sh -c "npm run build && npx serve -s dist -l 8080"
+    volumes:
+      - ./frontend/certcheck-v1:/app
+      - /app/node_modules
+
+  # Backend Services with Production Redis
+  backend:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+
+  login_register_user:
+    env_file:
+      - ./.env.production
+      - ./login_register/env.production
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+
+  tasks_scheduling:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+
+  vision_models:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+
+  aws:
+    environment:
+      - CELERY_BROKER_URL=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+      - CELERY_RESULT_BACKEND=rediss://celery-admin:Celery_admin_12345@master.celery-mqb-disabled.crs459.use1.cache.amazonaws.com:6379/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/ssl/certs/aws-global-bundle.pem&ssl_check_hostname=false
+
+  # Nginx - Production Configuration
+  nginx:
+    environment:
+      - APP_ENV=production
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/conf.d/nginx.conf.template

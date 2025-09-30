@@ -112,7 +112,7 @@ def get_db():
         conn.close()
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user-login")        # can be written differently
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/me", auto_error=False)        # can be written differently
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=401,
